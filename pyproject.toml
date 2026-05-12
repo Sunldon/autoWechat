@@ -1,0 +1,22 @@
+[project]
+name = "autowechat"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "chromadb>=1.5.7",
+    "langchain>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langchain-community>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "numpy>=2.2.6",
+    "opencv-python>=4.13.0.92",
+    "pillow>=12.2.0",
+    "pyautogui>=0.9.54",
+    "pygetwindow>=0.0.9",
+    "pywin32>=311",
+    "sentence-transformers>=5.4.1",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0.0",
+]

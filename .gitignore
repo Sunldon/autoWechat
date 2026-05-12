@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+chat_db/*
+models/*
+person/*
+
+debug_last_msg.png
+wechat_cleaned.md
+
+
