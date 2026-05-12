@@ -54,6 +54,11 @@ USER_CONFIG = WECHAT_CONFIG.get("user", {
     "name": "张三",       # 用户姓名
 })
 
+SEARCH_CONFIG = WECHAT_CONFIG.get("search_position", {
+    "x_offset": 150,       # 搜索框相对于窗口左边的水平偏移
+    "y_offset": 40,        # 搜索框相对于窗口顶部的垂直偏移
+})
+
 # 调试配置
 DEBUG_CONFIG = _config.get("debug", {
     "screenshot_path": "debug_last_msg.png"

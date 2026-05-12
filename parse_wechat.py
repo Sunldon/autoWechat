@@ -8,7 +8,7 @@ from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
 
 # --- 修改后的 Embedding 函数类 ---
 class BgeM3EmbeddingFunction(EmbeddingFunction): # 继承基类
-    def __init__(self, model_path='./models/bge-m3'):
+    def __init__(self, model_path='./models/BAAI/bge-m3'):
         print(f"正在加载 Embedding 模型: {model_path}...")
         self.model = SentenceTransformer(model_path)
 

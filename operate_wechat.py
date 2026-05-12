@@ -14,7 +14,7 @@ from pathlib import Path
 import os
 
 # 导入项目配置
-from config import WINDOW_CONFIG, DEBUG_CONFIG, CAPTURE_CONFIG
+from config import WINDOW_CONFIG, DEBUG_CONFIG, CAPTURE_CONFIG, SEARCH_CONFIG
 
 # ============ 日志配置 ============
 logging.basicConfig(
@@ -123,9 +123,9 @@ def search_and_click_contact(win, target_name: str) -> bool:
         是否成功找到并点击
     """
     # 搜索框在窗口中的绝对坐标（窗口固定在 0,0）
-    search_box_x = win.left + 150
-    search_box_y = win.top + 35
-
+    search_box_x = win.left + SEARCH_CONFIG["x_offset"]
+    search_box_y = win.top + SEARCH_CONFIG["y_offset"]
+    
     # 1. 点击搜索框
     pyautogui.click(search_box_x, search_box_y)
     time.sleep(0.5)

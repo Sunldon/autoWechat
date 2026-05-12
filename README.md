@@ -6,7 +6,7 @@
 
 ### 1. 环境要求
 
-- Python 3.10
+- Python 3.12
 - Windows 10/11
 - 微信桌面版3.9
 
@@ -47,13 +47,17 @@ MODEL_NAME=qwen3-vl-8b-instruct
 
 根据https://github.com/Sunldon/fork-WeChatMsg.git项目导出qq聊天记录，会生成wechat_cleaned.md，放置于当前项目根目录下
 
+首次运行时，需要下载向量数据库bge-m3，下载到当前目录下models/bge-m3，可以从ModelScope或者hf-mirror.com下，下面的命令也可以下载
+
+```
+uv run python download_models.py
+```
+
 执行命令，将当前目录下的wechat_cleaned.md 导入向量数据库
 
 ```
-python parse_wechat.py --parse
+uv run python parse_wechat.py --parse
 ```
-
-首次运行时，会下载向量数据库bge-m3，自动下载到当前目录下models/bge-m3，若下载失败可以从ModelScope或者hf-mirror.com下载
 
 ### 5. 生成person人物性格
 
@@ -62,11 +66,11 @@ python parse_wechat.py --parse
 ```
 
     目录: autoWechat\person
-Mode                 LastWriteTime         Length Name                                                     
-----                 -------------         ------ ----                                                     
--a----         2026/4/23     15:47           2407 interaction.md                                           
--a----         2026/4/23     15:48           1916 memory.md                                                
--a----         2026/4/23     15:47           2329 personality.md                                           
+Mode                 LastWriteTime         Length Name                                                 
+----                 -------------         ------ ----                                                 
+-a----         2026/4/23     15:47           2407 interaction.md                                       
+-a----         2026/4/23     15:48           1916 memory.md                                            
+-a----         2026/4/23     15:47           2329 personality.md                                       
 -a----         2026/4/23     15:48           3497 SKILL.md  
 ```
 
@@ -94,14 +98,24 @@ wechat:
     name: "张三"       # 用户姓名
 ```
 
-启动：
+若没有导入聊天记录，不依赖聊天记录启动：
 
 ```bash
 # 运行主程序
-uv run python auto_wechat.py
+uv run python auto_wechat.py --no-history
 
 # 或直接运行
-python auto_wechat.py
+python auto_wechat.py --no-history
+```
+
+有导入聊天记录，启动：
+
+```
+# 运行主程序
+uv run python auto_wechat.py --no-history
+
+# 或直接运行
+python auto_wechat.py --no-history
 ```
 
 若运行出现问题，可以按照下面的模块说明，逐步排查
@@ -110,14 +124,14 @@ python auto_wechat.py
 
 ### 1. operate_wechat.py - 微信窗口操作模块
 
-提供微信窗口控制、截图、消息发送等功能
+提供微信窗口控制、截图、消息发送等功能，指定联系人为张三
 
 ```
-uv run python operate_Wechat.py
+uv run python operate_Wechat.py --target 张三
 ```
 
 查看当前目录下是否有debug_last_msg.png生成，该图片为与指定人员的微信聊天对话截图，不包含侧边栏的联系人.
-如果聊天框截图不完整，可以调整config.yaml的配置
+如果聊天框截图不完整，或者是无法命中指定联系人，可以调整config.yaml的配置，如下所示
 
 ```
 # 聊天区域截取配置
@@ -125,6 +139,9 @@ capture:
   left_offset: 300      # 左侧偏移量（跳过左侧联系人栏）
   top_offset: 90        # 顶部偏移量（跳过标题栏）
   bottom_offset: 205   # 底部偏移量（跳过输入栏）
+search_position:
+  x_offset: 150       # 搜索框相对于窗口左边的水平偏移
+  y_offset: 40        # 搜索框相对于窗口顶部的垂直偏移
 ```
 
 ### 2. ai_analyse.py - AI 分析与对话模块

@@ -21,9 +21,12 @@ wechat:
 
   # 聊天区域截取配置，可以调整以适应不同屏幕分辨率和微信窗口布局
   capture:
-    left_offset: 300      # 左侧偏移量（跳过左侧联系人栏）
+    left_offset: 400      # 左侧偏移量（跳过左侧联系人栏）
     top_offset: 90        # 顶部偏移量（跳过标题栏）
-    bottom_offset: 205   # 底部偏移量（跳过输入栏）
+    bottom_offset: 320   # 底部偏移量（跳过输入栏）
+  search_position:
+    x_offset: 150       # 搜索框相对于窗口左边的水平偏移
+    y_offset: 40        # 搜索框相对于窗口顶部的垂直偏移
 # LM Studio / Qwen3-VL 模型配置
 model:
   api_base: "http://localhost:1234/v1"
