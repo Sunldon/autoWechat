@@ -126,6 +126,8 @@ python auto_wechat.py --no-history
 
 若运行出现问题，可以按照下面的模块说明，逐步排查
 
+若觉得回复风格不行，可以修改ai_analyse.py的create_system_prompt提示词。
+
 ## 模块说明
 
 ### 1. operate_wechat.py - 微信窗口操作模块
