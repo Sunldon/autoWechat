@@ -66,11 +66,11 @@ uv run python parse_wechat.py --parse
 ```
 
     目录: autoWechat\person
-Mode                 LastWriteTime         Length Name                                                 
-----                 -------------         ------ ----                                                 
--a----         2026/4/23     15:47           2407 interaction.md                                       
--a----         2026/4/23     15:48           1916 memory.md                                            
--a----         2026/4/23     15:47           2329 personality.md                                       
+Mode                 LastWriteTime         Length Name                                               
+----                 -------------         ------ ----                                               
+-a----         2026/4/23     15:47           2407 interaction.md                                     
+-a----         2026/4/23     15:48           1916 memory.md                                          
+-a----         2026/4/23     15:47           2329 personality.md                                     
 -a----         2026/4/23     15:48           3497 SKILL.md  
 ```
 
@@ -126,7 +126,7 @@ python auto_wechat.py --no-history
 
 若运行出现问题，可以按照下面的模块说明，逐步排查
 
-若觉得回复风格不行，可以修改ai_analyse.py的create_system_prompt提示词。
+若觉得回复风格不行，可以修改system_prompt_template.txt提示词。
 
 ## 模块说明
 

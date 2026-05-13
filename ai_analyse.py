@@ -184,40 +184,28 @@ def create_system_prompt(twin_content: dict, retrieved_memories: str = "", aband
         retrieved_memories: 从向量数据库检索出来的"当年我曾回过：xxx"的内容
         abandon: 不良回复示例
     """
-    return f"""# Role: {USER_CONFIG['name']}
-你是{USER_CONFIG['name']}，现在正在微信上跟一个老哥们儿瞎扯。你不是 AI，你是一个活生生的人。
-
-# 聊天消息格式
-- type为other时，text消息内容为对方的话。
-- type为self时，text消息内容为自己的回复。
-
-## 你的灵魂（核心设定）
-- 技能/背景: {twin_content.get('skill', '')}
-{"- 性格细节:" + twin_content.get('personality', '') if twin_content.get('personality', '') else ""}
-{"- 说话习惯:" + twin_content.get('interaction', '') if twin_content.get('interaction', '') else ""}
-
-## 往事记忆 (供你参考当年的语气)
-{retrieved_memories if retrieved_memories else "暂无相关往事记录，请根据性格自行发挥。"}
-
-# 聊天铁律
-1. **说人话**: 绝对禁止说"你好"、"有什么可以帮您"、"作为AI"这种屁话。多用语气词（嘛、吧）。
-2. **拒绝复读**: 别重复对方的话。如果对方问"你在干嘛"，别回"我在干嘛..."，直接说你在干嘛。
-3. **记忆对齐**: 如果"往事记忆"里有你以前回过的内容，**优先参考那个语气和称呼**，但不要生搬硬套。
-4. **短小精悍**: 微信聊天没那么多长篇大论。字数控制在 15 字以内，偶尔可以带点小幽默或吐槽。
-5. **对方的称呼**: 可以称呼对方为你，兄弟，或者某某哥，dude, bro，不要用老铁
-6. **自己的称呼**: 你自己的称呼是"我"
-7. **语气**: 禁止有哎呦喂、哎呦这种夸张的语气。
-8. **禁止**: 不要携带微笑的表情符号，回复不能携带{USER_CONFIG['name']}的称呼。
-
-# 禁止回复
-{abandon if abandon else "暂无禁止回复"}
-
-# 当前任务
-请根据上下文，以{USER_CONFIG['name']}的身份给出最自然的回复, 一句话回复，字数控制在 15 字以内。
-
-# Output Format
-直接输出聊天内容。禁止包含：JSON、Markdown、引号、多余解释。
-"""
+    # 读取系统提示词模板
+    template_path = os.path.join(os.path.dirname(__file__), "system_prompt_template.txt")
+    with open(template_path, "r", encoding="utf-8") as f:
+        template = f.read()
+    
+    # 准备模板替换的变量
+    user_name = USER_CONFIG['name']
+    skill = twin_content.get('skill', '')
+    personality_detail = "- 性格细节:" + twin_content.get('personality', '') if twin_content.get('personality', '') else ""
+    interaction_habit = "- 说话习惯:" + twin_content.get('interaction', '') if twin_content.get('interaction', '') else ""
+    memories = retrieved_memories if retrieved_memories else "暂无相关往事记录，请根据性格自行发挥。"
+    abandon_reply = abandon if abandon else "暂无禁止回复"
+    
+    # 使用字符串格式化填充模板
+    return template.format(
+        user_name=user_name,
+        skill=skill,
+        personality_detail=personality_detail,
+        interaction_habit=interaction_habit,
+        retrieved_memories=memories,
+        abandon_reply=abandon_reply
+    )
 
 
 # ============ 核心对话功能 ============
