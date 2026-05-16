@@ -30,17 +30,13 @@ cp .env.example .env
 
 编辑 `.env` 文件：
 
-vision_model_name必须要多模态的大模型，支持图片识别
+MODEL_NAME必须要多模态的大模型，支持图片识别
 
 ```env
 # LM Studio API 配置
-CHAT_API_BASE=http://localhost:1234/v1
-CHAT_API_KEY=lm-studio
-CHAT_MODEL_NAME=qwen3.5-9b
-
-VISION_API_BASE=http://localhost:1234/v1
-VISION_API_KEY=lm-studio
-VISION_MODEL_NAME=qwen3-vl-8b-instruct
+API_BASE=http://localhost:1234/v1
+API_KEY=lm-studio
+MODEL_NAME=qwen3-vl-8b-instruct
 ```
 
 ### 4. 导入聊天记录
@@ -70,11 +66,11 @@ uv run python parse_wechat.py --parse
 ```
 
     目录: autoWechat\person
-Mode                 LastWriteTime         Length Name                                             
-----                 -------------         ------ ----                                             
--a----         2026/4/23     15:47           2407 interaction.md                                   
--a----         2026/4/23     15:48           1916 memory.md                                        
--a----         2026/4/23     15:47           2329 personality.md                                   
+Mode                 LastWriteTime         Length Name                                               
+----                 -------------         ------ ----                                               
+-a----         2026/4/23     15:47           2407 interaction.md                                     
+-a----         2026/4/23     15:48           1916 memory.md                                          
+-a----         2026/4/23     15:47           2329 personality.md                                     
 -a----         2026/4/23     15:48           3497 SKILL.md  
 ```
 
