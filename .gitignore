@@ -9,8 +9,11 @@ wheels/
 # Virtual environments
 .venv
 chat_db/*
+!chat_db/.gitkeep
 models/*
+!models/.gitkeep
 person/*
+!person/.gitkeep
 
 debug_last_msg.png
 wechat_cleaned.md
