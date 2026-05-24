@@ -30,13 +30,18 @@ cp .env.example .env
 
 编辑 `.env` 文件：
 
-MODEL_NAME必须要多模态的大模型，支持图片识别
+VISION_MODEL_name必须要多模态的大模型，支持图片识别。
+CHAT_MODEL_NAME可以和VISION_MODEL_NAME一样。
 
 ```env
 # LM Studio API 配置
-API_BASE=http://localhost:1234/v1
-API_KEY=lm-studio
-MODEL_NAME=qwen3-vl-8b-instruct
+CHAT_API_BASE=http://localhost:1234/v1
+CHAT_API_KEY=lm-studio
+CHAT_MODEL_NAME=qwen/qwen3.5-9b
+
+VISION_API_BASE=http://localhost:1234/v1
+VISION_API_KEY=lm-studio
+VISION_MODEL_NAME=qwen3-vl-8b-instructt
 ```
 
 ### 4. 导入聊天记录
@@ -66,11 +71,11 @@ uv run python parse_wechat.py --parse
 ```
 
     目录: autoWechat\person
-Mode                 LastWriteTime         Length Name                                               
-----                 -------------         ------ ----                                               
--a----         2026/4/23     15:47           2407 interaction.md                                     
--a----         2026/4/23     15:48           1916 memory.md                                          
--a----         2026/4/23     15:47           2329 personality.md                                     
+Mode                 LastWriteTime         Length Name                                             
+----                 -------------         ------ ----                                             
+-a----         2026/4/23     15:47           2407 interaction.md                                   
+-a----         2026/4/23     15:48           1916 memory.md                                        
+-a----         2026/4/23     15:47           2329 personality.md                                   
 -a----         2026/4/23     15:48           3497 SKILL.md  
 ```
 
@@ -222,12 +227,20 @@ wechat:
     top_offset: 90        # 顶部偏移量（跳过标题栏）
     bottom_offset: 205   # 底部偏移量（跳过输入栏）
 # LM Studio / Qwen3-VL 模型配置
-model:
-  api_base: "http://localhost:1234/v1"
+# 聊天模型配置
+chat_model:
+  api_base: "http://localhost:1234/v1"  # 修正URL格式
   api_key: "lm-studio"
-  model_name: "qwen3-vl-8b-instruct"  # 注意：LangChain ChatOpenAI 使用 "gpt-4" 类 model name 会被忽略，实际以 api_base 为准
-  max_tokens: 51200
-  temperature: 0.85
+  model_name: "qwen/qwen3.5-9b"
+  max_tokens: 10240
+  temperature: 0.7                            # 创造性参数 (0-1)
+
+# 视觉模型配置（用于图片解析）
+vision_model:
+  api_base: "http://localhost:1234/v1"          # 视觉模型 API 地址
+  api_key: "lm-studio"                          # 视觉模型 API 密钥
+  model_name: "qwen3-vl-8b-instruct"            # 视觉模型名称（支持视觉的多模态模型）
+  max_tokens: 4096                              # 最大输出长度
 
 # 调试配置
 debug:
@@ -236,13 +249,17 @@ debug:
 
 ### .env 环境变量
 
-优先级高于 config.yaml 的环境变量配置。
+优先级高于 config.yaml 的环境变量配置。CHAT_MODEL_NAME可以和VISION_MODEL_NAME一样。
 
 ```env
 # LM Studio API 配置
-API_BASE=http://localhost:1234/v1
-API_KEY=lm-studio
-MODEL_NAME=qwen3-vl-8b-instruct
+CHAT_API_BASE=http://localhost:1234/v1
+CHAT_API_KEY=lm-studio
+CHAT_MODEL_NAME=qwen/qwen3.5-9b
+
+VISION_API_BASE=http://localhost:1234/v1
+VISION_API_KEY=lm-studio
+VISION_MODEL_NAME=qwen3-vl-8b-instruct
 ```
 
 **说明：** `.env` 中的配置会覆盖 `config.yaml` 中的对应配置。

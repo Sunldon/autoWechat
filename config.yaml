@@ -23,7 +23,7 @@ wechat:
   capture:
     left_offset: 400      # 左侧偏移量（跳过左侧联系人栏）
     top_offset: 90        # 顶部偏移量（跳过标题栏）
-    bottom_offset: 230   # 底部偏移量（跳过输入栏）
+    bottom_offset: 230   # 底部偏移量（跳过输入栏）,最好调整小一些，保证截图聊天记录完整
   search_position:
     x_offset: 150       # 搜索框相对于窗口左边的水平偏移
     y_offset: 40        # 搜索框相对于窗口顶部的垂直偏移
