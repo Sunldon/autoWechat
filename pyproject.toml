@@ -20,4 +20,6 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pyyaml>=6.0.0",
     "modelscope>=1.36.3",
+    "duckduckgo-search>=8.0.0",
+    "ddgs>=9.14.4",
 ]

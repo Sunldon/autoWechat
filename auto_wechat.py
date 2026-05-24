@@ -130,7 +130,8 @@ def main_flow():
 
                     for attempt in range(MONITOR_CONFIG["retry_attempts"]):
                         reply = chat_with_digital_twin(messages, last_reply, use_history=USE_HISTORY)
-
+                        if reply is None:
+                            continue
                         # 检查是否重复
                         if check_duplicate_messages(messages, reply) and attempt < MONITOR_CONFIG["retry_attempts"] - 1:
                             logger.info(f"回复重复，第 {attempt + 1} 次重试")
