@@ -23,14 +23,26 @@ def load_yaml_config(filename: str) -> dict:
 
 _config = load_yaml_config("config.yaml")
 
-# 模型配置
-MODEL_CONFIG = {
-    "api_base": os.getenv("API_BASE", _config.get("model", {}).get("api_base", "http://localhost:1234/v1")),
-    "api_key": os.getenv("API_KEY", _config.get("model", {}).get("api_key", "lm-studio")),
-    "model_name": os.getenv("MODEL_NAME", _config.get("model", {}).get("model_name", "qwen3-vl-8b-instruct")),
-    "max_tokens": _config.get("model", {}).get("max_tokens", 51200),
-    "temperature": _config.get("model", {}).get("temperature", 0.85)
+# 聊天模型配置
+CHAT_MODEL_CONFIG = {
+    "api_base": os.getenv("CHAT_API_BASE", _config.get("chat_model", {}).get("api_base", "http://localhost:1234/v1")),
+    "api_key": os.getenv("CHAT_API_KEY", _config.get("chat_model", {}).get("api_key", "lm-studio")),
+    "model_name": os.getenv("CHAT_MODEL_NAME", _config.get("chat_model", {}).get("model_name", "qwen3.5-9b")),
+    "max_tokens": _config.get("chat_model", {}).get("max_tokens", 2048),
+    "temperature": _config.get("chat_model", {}).get("temperature", 0.7)
 }
+
+# 视觉模型配置（用于图片解析）
+VISION_MODEL_CONFIG = {
+    "api_base": os.getenv("VISION_API_BASE", _config.get("vision_model", {}).get("api_base", "http://localhost:1234/v1")),
+    "api_key": os.getenv("VISION_API_KEY", _config.get("vision_model", {}).get("api_key", "lm-studio")),
+    "model_name": os.getenv("VISION_MODEL_NAME", _config.get("vision_model", {}).get("model_name", "qwen3-vl-8b-instruct")),
+    "max_tokens": _config.get("vision_model", {}).get("max_tokens", 4096),
+    "temperature": _config.get("vision_model", {}).get("temperature", 0.3)
+}
+
+# 保持向后兼容性
+MODEL_CONFIG = CHAT_MODEL_CONFIG  # 默认使用聊天模型
 
 # 微信配置
 WECHAT_CONFIG = _config.get("wechat", {})

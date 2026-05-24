@@ -23,18 +23,26 @@ wechat:
   capture:
     left_offset: 400      # 左侧偏移量（跳过左侧联系人栏）
     top_offset: 90        # 顶部偏移量（跳过标题栏）
-    bottom_offset: 320   # 底部偏移量（跳过输入栏）
+    bottom_offset: 230   # 底部偏移量（跳过输入栏）
   search_position:
     x_offset: 150       # 搜索框相对于窗口左边的水平偏移
     y_offset: 40        # 搜索框相对于窗口顶部的垂直偏移
 # LM Studio / Qwen3-VL 模型配置
-model:
-  api_base: "http://localhost:1234/v1"
+# 聊天模型配置
+chat_model:
+  api_base: "http://localhost:1234/v1"  # 修正URL格式
   api_key: "lm-studio"
-  model_name: "qwen3-vl-8b-instruct"  # 注意：LangChain ChatOpenAI 使用 "gpt-4" 类 model name 会被忽略，实际以 api_base 为准
-  max_tokens: 51200
-  temperature: 0.85
+  model_name: "qwen/qwen3.5-9b"
+  max_tokens: 10240
+  temperature: 0.7                            # 创造性参数 (0-1)
 
+# 视觉模型配置（用于图片解析）
+vision_model:
+  api_base: "http://localhost:1234/v1"          # 视觉模型 API 地址
+  api_key: "lm-studio"                          # 视觉模型 API 密钥
+  model_name: "qwen3-vl-8b-instruct"            # 视觉模型名称（支持视觉的多模态模型）
+  max_tokens: 4096                              # 最大输出长度
+  temperature: 0.3  
 # 调试配置
 debug:
   screenshot_path: "debug_last_msg.png"
