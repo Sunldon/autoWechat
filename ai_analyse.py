@@ -462,7 +462,7 @@ def chat_with_digital_twin(
                     for msg in user_input
                 ]
             )
-            print(f"系统提示:\n{system_prompt}")
+            # print(f"系统提示:\n{system_prompt}")
             messages = [
                 SystemMessage(content=system_prompt),
                 HumanMessage(
