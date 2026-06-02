@@ -1,6 +1,14 @@
 import traceback
-import logging
 import sys
+import os
+
+# ============ 强制离线：必须在 HuggingFace 库导入前设置 ============
+os.environ.pop("HF_ENDPOINT", None)
+os.environ.pop("HUGGINGFACE_HUB_ENDPOINT", None)
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
+
+import logging
 import time
 import json
 import argparse
@@ -19,6 +27,10 @@ from ai_analyse import (
 )
 
 from config import CONTACTS, MONITOR_CONFIG
+
+# ============ 记忆模块初始化 ============
+from memory.memory_manager import MemoryManager
+memory_manager = MemoryManager()
 
 # ============ 命令行参数解析 ============
 parser = argparse.ArgumentParser(description="微信自动回复系统")
@@ -129,7 +141,13 @@ def main_flow():
                     reply_success = False
 
                     for attempt in range(MONITOR_CONFIG["retry_attempts"]):
-                        reply = chat_with_digital_twin(messages, last_reply, use_history=USE_HISTORY)
+                        reply = chat_with_digital_twin(
+                            messages,
+                            last_reply,
+                            use_history=USE_HISTORY,
+                            memory_manager=memory_manager,
+                            user_id=TARGET_USER,
+                        )
                         if reply is None:
                             continue
                         # 检查是否重复

@@ -71,6 +71,43 @@ SEARCH_CONFIG = WECHAT_CONFIG.get("search_position", {
     "y_offset": 40,        # 搜索框相对于窗口顶部的垂直偏移
 })
 
+# 记忆模块配置
+MEMORY_CONFIG = _config.get("memory", {
+    "enabled": True,
+    "window_size": 10,
+    "llm": {
+        "provider": "openai",
+        "model": "qwen3.5-9b",
+        "openai_base_url": "http://localhost:1234/v1",
+        "api_key": "not-needed",
+    },
+    "embedder": {
+        "provider": "huggingface",
+        "model": "./models/BAAI/bge-m3",
+        "device": "cpu",
+        "embedding_dims": 1024,
+    },
+    "vector_store": {
+        "collection_name": "wechat_history",
+        "path": "./chat_db",
+        "embedding_model_dims": 1024,
+    },
+    "search": {
+        "hyde_max_chars": 3,
+        "hybrid_search": True,
+        "bm25_weight": 0.3,
+        "score_threshold": 0.96,
+        "top_k": 5,
+        "reranker": {
+            "enabled": False,
+            "model": "BAAI/bge-reranker-v2-m3",
+        },
+    },
+})
+
+# 检索增强配置快捷引用
+SEARCH_CONFIG = MEMORY_CONFIG.get("search", {})
+
 # 调试配置
 DEBUG_CONFIG = _config.get("debug", {
     "screenshot_path": "debug_last_msg.png"

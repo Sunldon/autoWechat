@@ -2,6 +2,13 @@ import base64
 import json
 import sys
 import os
+
+# ============ 强制离线：必须在 HuggingFace 库导入前设置 ============
+os.environ.pop("HF_ENDPOINT", None)
+os.environ.pop("HUGGINGFACE_HUB_ENDPOINT", None)
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
+
 import logging
 from typing import Optional
 from difflib import SequenceMatcher
@@ -18,8 +25,7 @@ from sqlalchemy import text
 import re
 
 # 导入配置
-from config import CHAT_MODEL_CONFIG, VISION_MODEL_CONFIG, DEBUG_CONFIG, USER_CONFIG
-from parse_wechat import ChatKnowledgeBase
+from config import CHAT_MODEL_CONFIG, VISION_MODEL_CONFIG, DEBUG_CONFIG, USER_CONFIG, MEMORY_CONFIG
 
 # ============ 日志配置 ============
 logging.basicConfig(
@@ -40,20 +46,6 @@ for lib in (
     "requests",
 ):
     logging.getLogger(lib).setLevel(logging.WARNING)
-
-# ============ 初始化 ============
-kb = None
-
-
-def get_kb():
-    """延迟初始化知识库"""
-    global kb
-
-    if kb is None:
-        kb = ChatKnowledgeBase()
-
-    return kb
-
 
 # ============ 初始化 LLM ============
 # 聊天模型（用于回复消息）
@@ -421,25 +413,33 @@ def chat_with_digital_twin(
     user_input: list,
     abandon: str = "",
     use_history: bool = True,
+    memory_manager=None,
+    user_id: str = "",
 ) -> str:
     """
     数字分身聊天
+
+    Args:
+        user_input: 消息列表 [{"sender": "self"/"other", "text": "..."}]
+        abandon: 禁止回复的内容
+        use_history: 是否使用历史记忆
+        memory_manager: MemoryManager 实例（可选，传入后接管记忆读写）
+        user_id: 联系人名称（memory_manager 需要）
     """
 
     twin_content = load_digital_twin()
 
     # ===== 记忆检索 =====
     if use_history:
-        text = ""
+        if memory_manager and user_id:
+            # MemoryManager 检索（Mem0 + 短期记忆）
+            latest_msg = ""
+            for msg in reversed(user_input):
+                if msg["sender"] == "other":
+                    latest_msg = msg["text"]
+                    break
 
-        for msg in reversed(user_input):
-            if msg["sender"] == "other":
-                text += msg["text"] + " "
-            else:
-                break
-
-        retrieved_memories = get_kb().query_context(text)
-
+            retrieved_memories = memory_manager.read_context(latest_msg, user_id)
     else:
         retrieved_memories = ""
 
@@ -447,7 +447,8 @@ def chat_with_digital_twin(
         advices = ""
         for i in range(3):
             logger.info(f"对话生成尝试 {i + 1}/3")
-                # ===== Prompt =====
+
+            # ===== Prompt =====
             system_prompt = create_system_prompt(
                 twin_content,
                 retrieved_memories,
@@ -468,13 +469,13 @@ def chat_with_digital_twin(
                 HumanMessage(
                     content=f"聊天记录如下：\n{chat_text}"
                 ),
-            ]            
+            ]
             reply = invoke_react(messages)
             reflect_reply = "PASS"
             # 2. 核心改动：接入反思链（剔除异常兜底词）
             if reply not in ["我刚卡了一下", "我刚才走神了，再说一遍？"]:
                 reflect_reply = reflect_and_refine(reply, chat_text, abandon)
-            
+
             # 使用正则匹配核心标签，兼容中英文冒号和换行
             pass_match = re.search(r"\[是否通过\][:：]\s*(.*)", reflect_reply)
             issues_match = re.search(r"\[存在问题\][:：]\s*([\s\S]*?)(?=\[改进建议\]|$)", reflect_reply)
@@ -489,9 +490,12 @@ def chat_with_digital_twin(
             print(f"【是否通过】:\n{is_pass}\n" + "-"*30)
             print(f"【存在问题】:\n{issues}\n" + "-"*30)
             print(f"【改进建议】:\n{suggestions}")
-            
+
             if is_pass == "PASS":
                 logger.info("反思链审核通过，保持原回复")
+                # ===== 记忆存储 =====
+                if memory_manager and user_id and use_history:
+                    memory_manager.store_context(user_input, user_id)
                 return reply.strip()
             advices = suggestions
             if i == 2:
@@ -499,6 +503,9 @@ def chat_with_digital_twin(
                 if "Action" in reply:
                     logger.info("检测到回复中包含工具调用，保留原回复以确保功能执行")
                     return None
+                # ===== 记忆存储 =====
+                if memory_manager and user_id and use_history:
+                    memory_manager.store_context(user_input, user_id)
                 return reply.strip()
         return None
 
@@ -543,6 +550,7 @@ if __name__ == "__main__":
         action="store_true",
         help="不使用历史聊天记录",
     )
+    parser.add_argument("--user-id", default="", type=str, help="联系人名称，如 张三（--parse 时必需）")
 
     args = parser.parse_args()
 
@@ -567,11 +575,16 @@ if __name__ == "__main__":
         for msg in messages:
             print(msg)
 
+        from memory.memory_manager import MemoryManager
+        memory_manager = MemoryManager()
+
         # ===== 回复 =====
         reply = chat_with_digital_twin(
             messages,
             abandon="现在几点了",
             use_history=not args.no_history,
+            memory_manager=memory_manager,
+            user_id=args.user_id,
         )
 
         print(f"\n回复: {reply}")

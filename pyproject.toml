@@ -22,4 +22,6 @@ dependencies = [
     "modelscope>=1.36.3",
     "duckduckgo-search>=8.0.0",
     "ddgs>=9.14.4",
+    "mem0ai>=2.0.0",
+    "rank-bm25>=0.2.2",
 ]

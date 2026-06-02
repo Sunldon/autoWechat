@@ -27,6 +27,38 @@ wechat:
   search_position:
     x_offset: 150       # 搜索框相对于窗口左边的水平偏移
     y_offset: 40        # 搜索框相对于窗口顶部的垂直偏移
+# ============ 记忆模块配置 (Mem0) ============
+memory:
+  enabled: true
+  # 窗口大小（对话轮数）
+  window_size: 10
+  # Mem0 LLM 配置（复用聊天模型的 LM Studio 地址）
+  llm:
+    provider: "openai"
+    model: "qwen/qwen3.5-9b"
+    openai_base_url: "http://localhost:1234/v1"
+    api_key: "not-needed"
+  # 嵌入模型配置（复用本地的 BGE-M3）
+  embedder:
+    provider: "huggingface"
+    model: "./models/BAAI/bge-m3"
+    device: "cpu"
+    embedding_dims: 1024
+  # 向量数据库配置
+  vector_store:
+    collection_name: "wechat_history"
+    path: "./chat_db"
+  # 检索增强配置（HyDE / BM25 / Reranker）
+  search:
+    hyde_max_chars: 3        # 查询字符数 ≤ 此值时跳过 HyDE（方案A）
+    hybrid_search: true      # 开启 BM25 + 向量混合检索（方案B）
+    bm25_weight: 1         # BM25 结果的 RRF 融合权重（越大越偏向关键词匹配）
+    score_threshold: 0.96    # 严格分数过滤（方案C）
+    top_k: 5                 # 最终注入 prompt 的记忆条数
+    reranker:
+      enabled: true          # 使用 mem0 内置 Cross-Encoder 精排
+      model: "BAAI/bge-reranker-v2-m3"
+
 # LM Studio / Qwen3-VL 模型配置
 # 聊天模型配置
 chat_model:
