@@ -648,26 +648,37 @@ class MemoryManager:
             return candidates
 
     # ==================== 核心检索管道 ====================
-    def _hybrid_search(self, query: str, user_id: str) -> list[dict]:
+    def _hybrid_search(
+        self,
+        query: str,
+        user_id: str,
+        search_top_k: int | None = None,
+        final_top_k: int | None = None,
+    ) -> list[dict]:
         """完整的混合检索管道：向量检索 + BM25 + RRF 融合 + Reranker
 
         Args:
             query: 检索查询
             user_id: 联系人名称
+            search_top_k: 初始检索的候选数量（越大召回越高），默认 self._top_k * 4
+            final_top_k: 最终返回数量，默认 self._top_k
 
         Returns:
             排序后的记忆列表 [{"memory": str, ...}]
         """
+        search_top_k = search_top_k or self._top_k * 4
+        final_top_k = final_top_k or self._top_k
+
         if not self.mem0:
             return []
 
         try:
-            # 1. 向量检索（Mem0，使用改写后的查询，低阈值以召回更多候选）
+            # 1. 向量检索（Mem0，低阈值以召回更多候选让 reranker 精排）
             memories = self.mem0.search(
                 query,
                 filters={"user_id": user_id},
-                top_k=self._top_k,
-                threshold=0.5,
+                top_k=search_top_k,
+                threshold=0.0,
             )
             vector_results = []
             if memories and isinstance(memories, dict):
@@ -683,7 +694,7 @@ class MemoryManager:
             # 2. BM25 关键词检索（方案B）
             bm25_results = []
             if self._hybrid_enabled:
-                bm25_results = self._bm25_search(query, user_id, top_k=self._top_k)
+                bm25_results = self._bm25_search(query, user_id, top_k=search_top_k)
                 if bm25_results:
                     print(f"  BM25 [{user_id}]: 命中 {len(bm25_results)} 条关键词匹配")
             for bm25 in bm25_results:
@@ -696,7 +707,7 @@ class MemoryManager:
                 fused = self._rrf_fusion(
                     vector_results,
                     bm25_results,
-                    top_k=self._top_k,
+                    top_k=search_top_k,
                     bm25_weight=self._bm25_weight,
                 )
                 print(
@@ -707,18 +718,19 @@ class MemoryManager:
                 # 纯向量检索
                 fused = [
                     {"memory": m["memory"], "fusion_score": m["score"]}
-                    for m in vector_results[: self._top_k]
+                    for m in vector_results[:search_top_k]
                 ]
 
-            # 4. 分数过滤 -> 放弃对 RRF 绝对值的过滤，直接送入精排，由精排分兜底
-            candidates = fused[:self._top_k]
+            # 4. 送入精排
+            candidates = fused[:search_top_k]
 
             # 5. Mem0 Cross-Encoder 精排
             reranked = self._mem0_rerank(query, candidates)
 
-            # 最终根据 Cross-Encoder 的置信度进行过滤（通常 CE 分数 > 0.1 或 0.3 较合理）
+            # 最终根据 Cross-Encoder 的置信度进行过滤
             filtered_results = [m for m in reranked if m.get("rerank_score", 0) >= 0.1]
-            return filtered_results if filtered_results else reranked[:2] # 真正的兜底
+            results = filtered_results if filtered_results else reranked[:2]
+            return results[:final_top_k]
 
         except Exception as e:
             import traceback as _tb
@@ -726,6 +738,27 @@ class MemoryManager:
             print(f"混合检索失败: {e}")
             _tb.print_exc()
             return []
+
+    def search(self, query: str, user_id: str, top_k: int = 5, search_top_k: int | None = None, use_hyde: bool = True) -> list[dict]:
+        """外部调用的完整检索管道：HyDE → 向量检索 + BM25 → RRF → Reranker → Top-K
+
+        Args:
+            query: 用户原始查询
+            user_id: 联系人名称
+            top_k: 返回的记忆条数
+            search_top_k: 初始检索候选数（越大召回越高，但 reranker 越慢）
+            use_hyde: 是否使用 HyDE 查询改写
+
+        Returns:
+            排序后的记忆列表
+        """
+        search_query = self._hyde_rewrite(query, user_id) if use_hyde else query
+        return self._hybrid_search(
+            search_query,
+            user_id,
+            search_top_k=search_top_k if search_top_k is not None else max(top_k * 6, 30),
+            final_top_k=top_k,
+        )
 
     def read_context(self, current_msg: str, user_id: str) -> str:
         """『读』阶段：任务开始前加载所有相关记忆
@@ -835,12 +868,12 @@ class MemoryManager:
         self.short_term.update(new_messages, user_id)
         print(f"短期记忆更新完成 [{user_id}]: {len(new_messages)} 条新消息")
 
-    def get_all_memories(self, user_id: str, top_k: int = 20) -> list:
+    def get_all_memories(self, user_id: str, top_k: int = 1000) -> list:
         """获取用户的所有记忆（用于调试）"""
         if not self.mem0:
             return []
         try:
-            results = self.mem0.get_all(filters={"user_id": user_id})
+            results = self.mem0.get_all(filters={"user_id": user_id}, top_k=top_k)
             if isinstance(results, dict):
                 return results.get("results", [])
             return results if isinstance(results, list) else []
