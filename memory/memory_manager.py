@@ -416,7 +416,7 @@ class MemoryManager:
         self._max_fingerprints = 50
 
         # ===== 检索增强配置 =====
-        sc = _app_config.SEARCH_CONFIG
+        sc = _app_config.MEMORY_SEARCH_CONFIG
         self._hyde_max_chars = sc.get("hyde_max_chars", 3)  
         self._hybrid_enabled = sc.get("hybrid_search", True)  
         self._bm25_weight = sc.get("bm25_weight", 0.3)  

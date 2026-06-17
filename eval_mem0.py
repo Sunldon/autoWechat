@@ -156,7 +156,7 @@ def is_hit(expected: str, retrieved_list: list[dict], min_span: int = 8) -> bool
 
 
 def print_config(mm: MemoryManager):
-    sc = _app_config.SEARCH_CONFIG
+    sc = _app_config.MEMORY_SEARCH_CONFIG
     logger.info(f"  混合检索:     {'开' if sc.get('hybrid_search', True) else '关'}")
     logger.info(f"  BM25 权重:     {sc.get('bm25_weight', 0.3)}")
     logger.info(f"  Reranker:      {'开' if sc.get('reranker', {}).get('enabled', False) else '关'}")

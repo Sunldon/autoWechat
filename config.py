@@ -106,7 +106,7 @@ MEMORY_CONFIG = _config.get("memory", {
 })
 
 # 检索增强配置快捷引用
-SEARCH_CONFIG = MEMORY_CONFIG.get("search", {})
+MEMORY_SEARCH_CONFIG = MEMORY_CONFIG.get("search", {})
 
 # 调试配置
 DEBUG_CONFIG = _config.get("debug", {

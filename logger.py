@@ -18,7 +18,7 @@ _INITIALIZED = False
 
 def setup_logger(
     log_dir: str | Path = _LOG_DIR,
-    console_level: int = logging.WARNING,
+    console_level: int = logging.INFO,
     file_level: int = logging.DEBUG,
     max_bytes: int = 5 * 1024 * 1024,
     backup_count: int = 7,
