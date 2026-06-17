@@ -1,6 +1,10 @@
 from modelscope import snapshot_download
 import os
 
+from logger import setup_logger, get_logger
+setup_logger(console_level=20)
+logger = get_logger(__name__)
+
 if not os.path.exists('./models'):
     os.makedirs('./models')
 
@@ -10,11 +14,11 @@ models = [
 ]
 
 for model_id, desc in models:
-    print(f"正在下载 {desc}: {model_id} ...")
+    logger.info(f"正在下载 {desc}: {model_id} ...")
     model_dir = snapshot_download(
         model_id,
         cache_dir='./models'
     )
-    print(f"  ✓ 已下载到: {model_dir}")
+    logger.info(f"已下载到: {model_dir}")
 
-print("\n所有模型下载完成")
+logger.info("所有模型下载完成")

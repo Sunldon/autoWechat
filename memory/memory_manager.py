@@ -1,4 +1,4 @@
-from collections import OrderedDict, deque
+﻿from collections import OrderedDict, deque
 import os
 import re
 from typing import Optional
@@ -6,8 +6,8 @@ from typing import Optional
 from rank_bm25 import BM25Okapi
 
 from memory.short_term_memory import ShortTermMemory
-
-# logger = logging.getLogger(__name__)
+from logger import get_logger
+logger = get_logger(__name__)
 
 # ============ 强制离线：禁止 HuggingFace 联网下载 ============
 os.environ.pop("HF_ENDPOINT", None)
@@ -69,7 +69,7 @@ def _safe_parse_json(text):
                 try:
                     obj, _ = decoder.raw_decode(candidate)
                     if isinstance(obj, dict) and "memory" in obj:
-                        print(
+                        logger.warning(
                             f"LLM 输出截断，已恢复 {len(obj.get('memory', []))} 条记忆"
                         )
                         return obj
@@ -154,15 +154,14 @@ def _patched_add(self, messages, metadata, filters, infer, prompt=None):
             )
             if response:
                 clean = remove_code_blocks(response)
-                # print(f"LLM 原始提取输出: {clean}")
                 if clean and clean.strip():
                     parsed = _safe_parse_json(clean)
                     if parsed:
                         extracted_memories = parsed.get("memory", [])
                     else:
-                        print("LLM 输出无法解析为 JSON，已跳过提取")
+                        logger.warning("LLM 输出无法解析为 JSON，已跳过提取")
         except Exception as e:
-            print(f"LLM 提取记忆解析失败: {e}")
+            logger.error(f"LLM 提取记忆解析失败: {e}")
             pass
 
         # ==================== 核心修复：正确的存储分流逻辑 ====================
@@ -172,15 +171,14 @@ def _patched_add(self, messages, metadata, filters, infer, prompt=None):
 
         # 情况 1：大模型偷懒，什么都没提取出来
         if not extracted_memories:
-            print("LLM extraction returned no memories. No long-term memory added.")
+            logger.debug("LLM extraction returned no memories")
             # 如果你希望【提取失败时】把原始对话强行当成记忆存入 ChromaDB 兜底，就留着下面这行；
             # 如果你觉得无价值的闲聊不配进 ChromaDB，直接返回 [] 即可。
             # return _original_add(self, messages, metadata, filters, False, prompt)
             return []
 
         # 情况 2：成功提取到了高价值的长期记忆事实！
-        print(
-            f"LLM 成功提取到 {len(extracted_memories)} 条长期记忆，开始写入 ChromaDB..."
+        logger.info(f"LLM 成功提取到 {len(extracted_memories)} 条长期记忆，开始写入 ChromaDB..."
         )
 
         # ==================== 去重：按文本内容去重，避免 LLM 重复返回相同事实 ====================
@@ -192,8 +190,7 @@ def _patched_add(self, messages, metadata, filters, infer, prompt=None):
                 seen_texts.add(mem_text)
                 unique_memories.append(mem_item)
         if len(unique_memories) < len(extracted_memories):
-            print(
-                f"去重: {len(extracted_memories)} -> {len(unique_memories)} 条唯一记忆"
+            logger.debug(f"去重: {len(extracted_memories)} -> {len(unique_memories)} 条唯一记忆"
             )
         extracted_memories = unique_memories
         # ============================================================
@@ -205,7 +202,7 @@ def _patched_add(self, messages, metadata, filters, infer, prompt=None):
                 # ==================== 核心修复点 ====================
                 # 将纯文本包装成 Mem0 标准的格式，防止它把字符串拆成字符
                 formatted_message = [{"role": "user", "content": mem_text}]
-                print(f"准备存储的记忆文本: {mem_text}")
+                logger.debug(f"准备存储的记忆文本: {mem_text}")
                 # 传入包装后的 formatted_message
                 res = _original_add(
                     self,
@@ -229,7 +226,7 @@ def _patched_add(self, messages, metadata, filters, infer, prompt=None):
         return stored_results
 
     except Exception as e:
-        print(f"_patched_add failed: {e}")
+        logger.error(f"_patched_add failed: {e}")
         _tb.print_exc()
         return []
 
@@ -429,8 +426,7 @@ class MemoryManager:
         # BM25 索引（惰性构建 + 增量更新）
         self._bm25_models: dict[str, IncrementalBM25] = {}
 
-        print(
-            f"MemoryManager 初始化完成 | "
+        logger.info(f"MemoryManager 初始化完成 | "
             f"HyDE跳过≤{self._hyde_max_chars}字 | "
             f"混合检索={'开' if self._hybrid_enabled else '关'} | "
             f"分数阈值={self._score_threshold}"
@@ -446,13 +442,13 @@ class MemoryManager:
             from mem0 import Memory
 
             memory = Memory.from_config(config)
-            print("Mem0 初始化成功 (collection: wechat_history)")
+            logger.info("Mem0 初始化成功 (collection: wechat_history)")
             return memory
         except ImportError:
-            print("mem0ai 未安装，长期记忆功能不可用")
+            logger.warning("mem0ai 未安装，长期记忆功能不可用")
             return None
         except Exception as e:
-            print(f"Mem0 初始化失败: {e}，长期记忆功能不可用")
+            logger.warning(f"Mem0 初始化失败: {e}，长期记忆功能不可用")
             return None
 
     def _make_llm_client(self):
@@ -514,7 +510,7 @@ class MemoryManager:
         """
         
         if not self._should_use_hyde(query):
-            print(f"[HyDE] 跳过（短关键词）: {query}")
+            logger.debug(f"[HyDE] 跳过（短关键词）: {query}")
             return query
 
         try:
@@ -542,11 +538,11 @@ class MemoryManager:
             hyde_doc = response.choices[0].message.content.strip()
             if hyde_doc:
                 hyde_query = f"{query}\n\n{hyde_doc}"
-                print(f"[HyDE] 原始查询: {query}")
-                print(f"[HyDE] 假设文档: {hyde_doc}")
+                logger.debug(f"[HyDE] 原始查询: {query}")
+                logger.debug(f"[HyDE] 假设文档: {hyde_doc}")
                 return hyde_query
         except Exception as e:
-            print(f"[HyDE] 生成失败，回退原始查询: {e}")
+            logger.warning(f"[HyDE] 生成失败，回退原始查询: {e}")
         return query
 
     # ==================== 方案B：rank_bm25 关键词检索 ====================
@@ -574,7 +570,7 @@ class MemoryManager:
             corpus = [m.get("memory", "") for m in memories if m.get("memory")]
             if corpus:
                 model.build(corpus)
-                print(f"  BM25索引 [{user_id}]: 构建完成，{len(corpus)} 篇文档")
+                logger.debug(f"  BM25索引 [{user_id}]: 构建完成，{len(corpus)} 篇文档")
 
         # 3. 搜索
         if model.is_empty:
@@ -619,7 +615,7 @@ class MemoryManager:
         # 按 fusion score 排序
         sorted_docs = sorted(doc_ranks.items(), key=lambda x: x[1], reverse=True)
         for text, score in sorted_docs:
-            print(f"  {text}: {score:.4f}")
+            logger.debug(f"  {text}: {score:.4f}")
         return [
             {"memory": text, "fusion_score": score}
             for text, score in sorted_docs[:top_k]
@@ -634,17 +630,17 @@ class MemoryManager:
         if not self._reranker_cfg.get("enabled", False):
             return candidates
         if not self.mem0 or not self.mem0.reranker:
-            print("[Reranker] mem0 无 reranker 实例，跳过精排")
+            logger.debug("[Reranker] mem0 无 reranker 实例，跳过精排")
             return candidates
 
         try:
             reranked = self.mem0.reranker.rerank(
                 query, candidates, top_k=len(candidates)
             )
-            print(f"[Reranker] 重排序: {len(candidates)} → {len(reranked)} 条")
+            logger.debug(f"[Reranker] 重排序: {len(candidates)} → {len(reranked)} 条")
             return reranked
         except Exception as e:
-            print(f"[Reranker] 精排失败: {e}")
+            logger.warning(f"[Reranker] 精排失败: {e}")
             return candidates
 
     # ==================== 核心检索管道 ====================
@@ -689,17 +685,16 @@ class MemoryManager:
                         score = mem.get("score", 0.0)
                         if text:
                             vector_results.append({"memory": text, "score": score})
-                            print(f"  向量 [{user_id}]: score={score:.4f} | {text}")
+                            logger.debug(f"  向量 [{user_id}]: score={score:.4f} | {text}")
 
             # 2. BM25 关键词检索（方案B）
             bm25_results = []
             if self._hybrid_enabled:
                 bm25_results = self._bm25_search(query, user_id, top_k=search_top_k)
                 if bm25_results:
-                    print(f"  BM25 [{user_id}]: 命中 {len(bm25_results)} 条关键词匹配")
+                    logger.debug(f"  BM25 [{user_id}]: 命中 {len(bm25_results)} 条关键词匹配")
             for bm25 in bm25_results:
-                print(
-                    f"  BM25 [{user_id}]: score={bm25['bm25_score']:.4f} | {bm25['memory']}"
+                logger.debug(f"  BM25 [{user_id}]: score={bm25['bm25_score']:.4f} | {bm25['memory']}"
                 )
 
             # 3. RRF 融合（方案B）
@@ -710,8 +705,7 @@ class MemoryManager:
                     top_k=search_top_k,
                     bm25_weight=self._bm25_weight,
                 )
-                print(
-                    f"  RRF融合 [{user_id}]: {len(vector_results)}向量 + "
+                logger.debug(f"  RRF融合 [{user_id}]: {len(vector_results)}向量 + "
                     f"{len(bm25_results)}BM25 → {len(fused)}候选"
                 )
             else:
@@ -735,7 +729,7 @@ class MemoryManager:
         except Exception as e:
             import traceback as _tb
 
-            print(f"混合检索失败: {e}")
+            logger.error(f"混合检索失败: {e}")
             _tb.print_exc()
             return []
 
@@ -786,22 +780,22 @@ class MemoryManager:
             score_str = f"{score:.4f}"
             if rerank is not None:
                 score_str += f" (rerank={rerank:.4f})"
-            print(f"  最终记忆 [{user_id}]: score={score_str} | {text[:50]}")
+            logger.debug(f"  最终记忆 [{user_id}]: score={score_str} | {text[:50]}")
             if text:
                 memory_texts.append(text)
 
         if memory_texts:
             parts.append("[长期记忆]\n" + "\n".join(memory_texts))
-            print(f"检索完成 [{user_id}]: 注入 {len(memory_texts)} 条记忆")
+            logger.info(f"检索完成 [{user_id}]: 注入 {len(memory_texts)} 条记忆")
         else:
-            print(f"检索完成 [{user_id}]: 无相关记忆")
+            logger.info(f"检索完成 [{user_id}]: 无相关记忆")
 
         # 2. 短期记忆摘要
         summary = self.short_term.get_summary(user_id)
         if summary:
             parts.append(summary)
 
-        print(f"parts: {parts}")
+        logger.debug(f"parts: {parts}")
         return "\n\n".join(parts) if parts else ""
 
     def store_context(self, messages: list[dict], user_id: str):
@@ -828,11 +822,10 @@ class MemoryManager:
                     stored.popitem(last=False)
 
         if not new_messages:
-            print(f"无新消息需要存储 [{user_id}]")
+            logger.debug(f"无新消息需要存储 [{user_id}]")
             return
 
-        print(
-            f"增量存储 [{user_id}]: {len(messages)} 条总量 → "
+        logger.info(f"增量存储 [{user_id}]: {len(messages)} 条总量 → "
             f"跳过 {len(messages) - len(new_messages)} 条已存 → "
             f"新增 {len(new_messages)} 条"
         )
@@ -850,7 +843,7 @@ class MemoryManager:
                     )
                 if conv_messages:
                     self.mem0.add(conv_messages, user_id=user_id)
-                    print(f"Mem0 存储完成 [{user_id}]: {len(conv_messages)} 条新消息")
+                    logger.info(f"Mem0 存储完成 [{user_id}]: {len(conv_messages)} 条新消息")
                     # BM25 增量更新：从刚提取的记忆中直接添加到索引
                     global _pending_bm25_texts
                     texts = _pending_bm25_texts.pop(user_id, [])
@@ -860,13 +853,13 @@ class MemoryManager:
                         model = self._bm25_models[user_id]
                         for text in texts:
                             model.add_document(text)
-                        print(f"  BM25增量 [{user_id}]: 新增 {len(texts)} 篇文档")
+                        logger.debug(f"  BM25增量 [{user_id}]: 新增 {len(texts)} 篇文档")
             except Exception as e:
-                print(f"Mem0 存储失败: {e}")
+                logger.error(f"Mem0 存储失败: {e}")
 
         # 2. 更新短期记忆窗口（也只用新消息）
         self.short_term.update(new_messages, user_id)
-        print(f"短期记忆更新完成 [{user_id}]: {len(new_messages)} 条新消息")
+        logger.debug(f"短期记忆更新完成 [{user_id}]: {len(new_messages)} 条新消息")
 
     def get_all_memories(self, user_id: str, top_k: int = 1000) -> list:
         """获取用户的所有记忆（用于调试）"""
@@ -878,5 +871,6 @@ class MemoryManager:
                 return results.get("results", [])
             return results if isinstance(results, list) else []
         except Exception as e:
-            print(f"获取全部记忆失败: {e}")
+            logger.error(f"获取全部记忆失败: {e}")
             return []
+

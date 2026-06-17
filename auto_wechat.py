@@ -8,11 +8,14 @@ os.environ.pop("HUGGINGFACE_HUB_ENDPOINT", None)
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["HF_HUB_OFFLINE"] = "1"
 
-import logging
 import time
 import json
 import argparse
 from datetime import datetime
+
+from logger import setup_logger, get_logger
+setup_logger()
+logger = get_logger(__name__)
 
 from operate_wechat import (
     get_wechat_window,
@@ -43,14 +46,6 @@ args = parser.parse_args()
 
 # 全局变量：是否使用历史记录
 USE_HISTORY = not args.no_history
-
-# ============ 日志配置 ============
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%H:%M:%S",
-)
-logger = logging.getLogger(__name__)
 
 
 # ============ 自定义异常 ============

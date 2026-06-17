@@ -24,6 +24,9 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from logger import setup_logger, get_logger
+logger = get_logger(__name__)
+
 from memory.memory_manager import MemoryManager
 import config as _app_config
 
@@ -154,38 +157,39 @@ def is_hit(expected: str, retrieved_list: list[dict], min_span: int = 8) -> bool
 
 def print_config(mm: MemoryManager):
     sc = _app_config.SEARCH_CONFIG
-    print(f"  混合检索:     {'开' if sc.get('hybrid_search', True) else '关'}")
-    print(f"  BM25 权重:     {sc.get('bm25_weight', 0.3)}")
-    print(f"  Reranker:      {'开' if sc.get('reranker', {}).get('enabled', False) else '关'}")
-    print(f"  HyDE 跳过:     ≤{sc.get('hyde_max_chars', 3)} 个中文字符")
-    print(f"  分数阈值:      {sc.get('score_threshold', 0.96)}")
-    print(f"  最终 top_k:    {sc.get('top_k', 5)}")
+    logger.info(f"  混合检索:     {'开' if sc.get('hybrid_search', True) else '关'}")
+    logger.info(f"  BM25 权重:     {sc.get('bm25_weight', 0.3)}")
+    logger.info(f"  Reranker:      {'开' if sc.get('reranker', {}).get('enabled', False) else '关'}")
+    logger.info(f"  HyDE 跳过:     ≤{sc.get('hyde_max_chars', 3)} 个中文字符")
+    logger.info(f"  分数阈值:      {sc.get('score_threshold', 0.96)}")
+    logger.info(f"  最终 top_k:    {sc.get('top_k', 5)}")
 
 
 def main():
+    setup_logger(console_level=20)  # INFO for standalone CLI
     args = parse_args()
     user_id = _load_user_id(args.user_id)
     random.seed(args.seed)
     use_llm = not args.no_llm_queries
 
-    print("=" * 60)
-    print(f"评估用户: {user_id}")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info(f"评估用户: {user_id}")
+    logger.info("=" * 60)
 
     # ---- 1. 初始化（压制模型加载的输出） ----
     with contextlib.redirect_stdout(io.StringIO()):
         mm = MemoryManager()
     if not mm.mem0:
-        print("Mem0 未初始化")
+        logger.error("Mem0 未初始化")
         sys.exit(1)
 
     llm_client = _make_llm_client() if use_llm else None
 
-    print("\n--- 检索管道配置 ---")
+    logger.info("--- 检索管道配置 ---")
     print_config(mm)
 
     # ---- 2. 拉取全部记忆 ----
-    print("\n正在拉取所有记忆...")
+    logger.info("正在拉取所有记忆...")
     all_raw = mm.get_all_memories(user_id, top_k=1000)
 
     seen = set()
@@ -198,9 +202,9 @@ def main():
             seen.add(text)
             all_memories.append(text)
 
-    print(f"共获取到 {len(all_raw)} 条原始记录，去重后 {len(all_memories)} 条不同记忆")
+    logger.info(f"共获取到 {len(all_raw)} 条原始记录，去重后 {len(all_memories)} 条不同记忆")
     if not all_memories:
-        print("没有记忆数据，请先运行: python parse_wechat.py --parse --user-id", user_id)
+        logger.warning(f"没有记忆数据，请先运行: python parse_wechat.py --parse --user-id {user_id}")
         sys.exit(0)
 
     # ---- 3. 构建测试集 ----
@@ -208,16 +212,16 @@ def main():
     if args.sample and len(test_dataset) > args.sample:
         test_dataset = random.sample(test_dataset, args.sample)
 
-    print(f"\n测试集: {len(test_dataset)} 条")
-    print(f"  例如: '{test_dataset[0][0][:30]}' → '{test_dataset[0][1][:30]}'")
+    logger.info(f"测试集: {len(test_dataset)} 条")
+    logger.info(f"  例如: '{test_dataset[0][0][:30]}' → '{test_dataset[0][1][:30]}'")
 
     # ---- 4. 评估每个 K ----
     results: dict[int, dict] = {}
 
     for k in sorted(args.k):
-        print(f"\n{'─' * 50}")
-        print(f"Hit@{k}  评估中...")
-        print(f"{'─' * 50}")
+        logger.info("─" * 50)
+        logger.info(f"Hit@{k}  评估中...")
+        logger.info("─" * 50)
 
         hit_count = 0
         misses = []
@@ -226,7 +230,7 @@ def main():
             try:
                 retrieved = search_quiet(mm, q, user_id, top_k=k)
             except Exception as e:
-                print(f"  搜索失败: {e}")
+                logger.warning(f"  搜索失败: {e}")
                 continue
 
             hit = is_hit(expected, retrieved)
@@ -238,7 +242,7 @@ def main():
             cur = i + 1
             if cur % 10 == 0 or cur == len(test_dataset):
                 pct = hit_count / cur * 100
-                print(f"  进度: {cur}/{len(test_dataset)} | 命中: {hit_count}/{cur} ({pct:.0f}%)")
+                logger.info(f"  进度: {cur}/{len(test_dataset)} | 命中: {hit_count}/{cur} ({pct:.0f}%)")
 
         hit_rate = hit_count / len(test_dataset) if test_dataset else 0
         results[k] = {
@@ -248,33 +252,33 @@ def main():
             "misses": misses,
         }
 
-        print(f"\n  Hit@{k} = {hit_count}/{len(test_dataset)} = {hit_rate:.2%}")
+        logger.info(f"  Hit@{k} = {hit_count}/{len(test_dataset)} = {hit_rate:.2%}")
 
     # ---- 5. 汇总报告 ----
-    print("\n" + "=" * 60)
-    print("  汇总结果")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("汇总结果")
+    logger.info("=" * 60)
     for k in sorted(args.k):
         r = results[k]
         bar_len = 30
         filled = int(r["hit_rate"] * bar_len)
         bar = "#" * filled + "." * (bar_len - filled)
-        print(f"  Hit@{k}  {bar}  {r['hit_count']:>3}/{r['total']:<3} = {r['hit_rate']:.2%}")
+        logger.info(f"  Hit@{k}  {bar}  {r['hit_count']:>3}/{r['total']:<3} = {r['hit_rate']:.2%}")
 
     best_k = max(results, key=lambda k: results[k]["hit_rate"])
-    print(f"\n  最佳 K: {best_k} (Hit@{best_k} = {results[best_k]['hit_rate']:.2%})")
+    logger.info(f"  最佳 K: {best_k} (Hit@{best_k} = {results[best_k]['hit_rate']:.2%})")
 
     # ---- 6. 未命中样本 ----
     worst_k = max(results, key=lambda k: len(results[k]["misses"]))
     misses = results[worst_k]["misses"]
     if misses:
-        print(f"\n未命中样本 (Hit@{worst_k}, 共 {len(misses)} 条, 显示前 10):")
+        logger.info(f"未命中样本 (Hit@{worst_k}, 共 {len(misses)} 条, 显示前 10):")
         for q, exp, ret in misses[:10]:
-            print(f"  Q: {q}")
-            print(f"  E: {exp}")
+            logger.info(f"  Q: {q}")
+            logger.info(f"  E: {exp}")
             first = (ret[0].get("memory", "") if isinstance(ret[0], dict) else str(ret[0])) if ret else "(空)"
-            print(f"  R[0]: {first[:60]}")
-            print()
+            logger.info(f"  R[0]: {first[:60]}")
+            logger.info("")
 
     # ---- 7. 保存报告 ----
     report = f"eval_report_{user_id}.txt"
@@ -290,7 +294,7 @@ def main():
                 is_miss = any(m[0] == q and m[1] == e for m in r["misses"])
                 tags.append("MISS" if is_miss else "HIT ")
             f.write(f"[{' '.join(tags)}] Q: {q}\n     E: {e}\n\n")
-    print(f"详细报告: {report}")
+    logger.info(f"详细报告: {report}")
 
 
 if __name__ == "__main__":

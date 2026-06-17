@@ -2,6 +2,9 @@ import re
 import os
 import sys
 
+from logger import setup_logger, get_logger
+logger = get_logger(__name__)
+
 
 def parse_wechat_markdown(md_text):
     """解析 self: xxx 或 other: xxx 格式的 Markdown 行"""
@@ -14,7 +17,7 @@ def parse_wechat_markdown(md_text):
             "clean_text": content,
             "metadata": {"sender": role_raw},
         }
-    print(f"解析失败 - 原始文本: [{repr(md_text)}]")
+    logger.warning(f"解析失败 - 原始文本: [{repr(md_text)}]")
     return None
 
 
@@ -32,12 +35,12 @@ def import_markdown_file(file_path, user_id="", memory=None):
     if not os.path.exists(file_path):
         return
     if not memory or not user_id:
-        print("需要 --user-id 来指定存储目标")
+        logger.warning("需要 --user-id 来指定存储目标")
         return
 
     with open(file_path, "r", encoding="utf-8") as f:
         lines = [line.strip() for line in f.readlines() if line.strip()]
-    print(f"总共读取到 {len(lines)} 行 Markdown 记录, 开始解析...")
+    logger.info(f"总共读取到 {len(lines)} 行 Markdown 记录, 开始解析...")
 
     # 解析所有对话对
     pairs = []
@@ -48,7 +51,7 @@ def import_markdown_file(file_path, user_id="", memory=None):
             if parsed_other and parsed_self:
                 pairs.append((parsed_other["clean_text"], parsed_self["clean_text"]))
 
-    print(f"解析到 {len(pairs)} 组对话对，分批导入（每批 {BATCH_SIZE} 组）...")
+    logger.info(f"解析到 {len(pairs)} 组对话对，分批导入（每批 {BATCH_SIZE} 组）...")
 
     total_imported = 0
     for start in range(0, len(pairs), BATCH_SIZE):
@@ -61,14 +64,15 @@ def import_markdown_file(file_path, user_id="", memory=None):
         try:
             memory.add(batch_messages, user_id=user_id)
             total_imported += len(batch)
-            print(f"  批次 {start // BATCH_SIZE + 1}: 导入 {len(batch)} 组")
+            logger.info(f"  批次 {start // BATCH_SIZE + 1}: 导入 {len(batch)} 组")
         except Exception as e:
-            print(f"  批次 {start // BATCH_SIZE + 1} 失败: {e}")
+            logger.error(f"  批次 {start // BATCH_SIZE + 1} 失败: {e}")
 
-    print(f"成功导入 {total_imported} 组 [问答对] 记忆到 Mem0（user_id={user_id}）")
+    logger.info(f"成功导入 {total_imported} 组 [问答对] 记忆到 Mem0（user_id={user_id}）")
 
 
 if __name__ == "__main__":
+    setup_logger(console_level=20)  # INFO for standalone CLI
     import argparse
 
     parser = argparse.ArgumentParser(description="导入聊天记录到 Mem0")
@@ -83,34 +87,35 @@ if __name__ == "__main__":
         from mem0 import Memory
 
         memory = Memory.from_config(DEFAULT_MEM0_CONFIG)
-        print("Mem0 已初始化")
+        logger.info("Mem0 已初始化")
     except Exception as e:
-        print(f"Mem0 初始化失败: {e}")
+        logger.error(f"Mem0 初始化失败: {e}")
         sys.exit(1)
 
     if args.parse:
         if not args.user_id:
-            print("--parse 需要 --user-id 参数指定联系人名称")
+            logger.warning("--parse 需要 --user-id 参数指定联系人名称")
             sys.exit(1)
 
         import_markdown_file("wechat_cleaned.md", user_id=args.user_id, memory=memory)
 
     if args.test and "memory" in dir() and memory:
-        print(f"\n测试搜索: {args.test}")
+        logger.info(f"测试搜索: {args.test}")
         try:
             r = memory.search(args.test, filters={"user_id": args.user_id}, top_k=3)
             results = r.get("results", [])
-            print(f"找到 {len(results)} 条结果:")
+            logger.info(f"找到 {len(results)} 条结果:")
             for i, mem in enumerate(results):
-                print(f"  [{i+1}] {mem.get('memory', '')[:80]}")
+                logger.info(f"  [{i+1}] {mem.get('memory', '')[:80]}")
         except Exception as e:
-            print(f"搜索失败: {e}")
+            logger.error(f"搜索失败: {e}")
 
-        print(f"\n测试读取上下文: {args.test}")
+        logger.info(f"测试读取上下文: {args.test}")
         try:
             from memory.memory_manager import MemoryManager
             memory_manager = MemoryManager()            
             r = memory_manager.read_context(args.test, user_id=args.user_id)
-            print(f"上下文信息:\n{r}")
+            logger.info(f"上下文信息:\n{r}")
         except Exception as e:
-            print(f"搜索失败: {e}")
+            logger.error(f"搜索失败: {e}")
+

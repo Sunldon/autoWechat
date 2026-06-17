@@ -1,12 +1,11 @@
-import logging
 from typing import Optional
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 
 from config import CHAT_MODEL_CONFIG
-
-logger = logging.getLogger(__name__)
+from logger import get_logger
+logger = get_logger(__name__)
 
 
 class ShortTermMemory:

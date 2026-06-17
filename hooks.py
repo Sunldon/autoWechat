@@ -1,9 +1,9 @@
 import re
-import logging
 from typing import Optional
 from difflib import SequenceMatcher
 
-logger = logging.getLogger(__name__)
+from logger import get_logger
+logger = get_logger(__name__)
 
 
 class HookResult:

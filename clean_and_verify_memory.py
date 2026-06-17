@@ -19,6 +19,9 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 _BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _BASE)
 
+from logger import setup_logger, get_logger
+logger = get_logger(__name__)
+
 
 # ============================================================
 #  清理旧数据
@@ -36,9 +39,9 @@ def clean_chromadb():
         try:
             client.delete_collection(name)
             deleted.append(name)
-            print(f"  [删除] collection: {name}")
+            logger.info(f"  [删除] collection: {name}")
         except Exception:
-            print(f"  [跳过] collection {name} 不存在或已删除")
+            logger.info(f"  [跳过] collection {name} 不存在或已删除")
 
     # 清理 ChromaDB 数据目录中的子目录
     cpath = os.path.join(_BASE, "chat_db")
@@ -46,12 +49,12 @@ def clean_chromadb():
         item_path = os.path.join(cpath, item)
         if item != "chroma.sqlite3" and os.path.isdir(item_path):
             shutil.rmtree(item_path)
-            print(f"  [删除] 数据目录: {item_path}")
+            logger.info(f"  [删除] 数据目录: {item_path}")
 
     if not deleted:
-        print("  [结果] 所有目标 collection 均已不存在，无需清理")
+        logger.info("  [结果] 所有目标 collection 均已不存在，无需清理")
     else:
-        print(f"  [结果] 已清理 {len(deleted)} 个 collection: {deleted}")
+        logger.info(f"  [结果] 已清理 {len(deleted)} 个 collection: {deleted}")
     return True
 
 
@@ -64,7 +67,7 @@ def verify_memories(user_id: str):
 
     mm = MemoryManager()
     if not mm.mem0:
-        print("[错误] Mem0 未初始化")
+        logger.error("Mem0 未初始化")
         return False
 
     resp = mm.mem0.search("", filters={"user_id": user_id}, top_k=500, threshold=0.0)
@@ -75,10 +78,10 @@ def verify_memories(user_id: str):
     )
 
     if not all_raw:
-        print("[结果] ChromaDB 中无任何记忆数据（空数据库）")
+        logger.info("ChromaDB 中无任何记忆数据（空数据库）")
         return True
 
-    print(f"\n共 {len(all_raw)} 条原始记录\n")
+    logger.info(f"共 {len(all_raw)} 条原始记录")
 
     # --- 检查1: 是否存在 raw 原始消息 ---
     raw_keywords = ["self:", "other:", "一起走啊"]
@@ -90,11 +93,11 @@ def verify_memories(user_id: str):
                 raw_found.append(text)
 
     if raw_found:
-        print("[失败] 发现 raw 原始消息残留:")
+        logger.warning("发现 raw 原始消息残留:")
         for t in raw_found[:10]:
-            print(f"       - {t[:80]}")
+            logger.warning(f"       - {t[:80]}")
     else:
-        print("[通过] 未发现任何 raw 原始消息残留")
+        logger.info("未发现任何 raw 原始消息残留")
 
     # --- 检查2: 是否每条记忆都是 LLM 提炼的特征 ---
     llm_like = 0
@@ -112,15 +115,15 @@ def verify_memories(user_id: str):
             non_llm += 1
             non_llm_samples.append(text)
 
-    print(f"LLM 提取特征匹配: {llm_like} 条")
-    print(f"非 LLM 特征  : {non_llm} 条")
+    logger.info(f"LLM 提取特征匹配: {llm_like} 条")
+    logger.info(f"非 LLM 特征  : {non_llm} 条")
     if non_llm_samples:
-        print("非 LLM 特征样本:")
+        logger.info("非 LLM 特征样本:")
         for s in non_llm_samples[:10]:
-            print(f"  - {s[:80]}")
+            logger.info(f"  - {s[:80]}")
 
     # --- 打印全部记忆清单 ---
-    print("\n全部记忆清单:")
+    logger.info("全部记忆清单:")
     seen = set()
     for i, m in enumerate(all_raw):
         text = (m.get("memory") or "").strip()
@@ -129,15 +132,15 @@ def verify_memories(user_id: str):
         if text not in seen:
             seen.add(text)
             role = m.get("role", "?")
-            print(f"  [{i:3d}] [{role:10s}] {text[:100]}")
+            logger.info(f"  [{i:3d}] [{role:10s}] {text[:100]}")
 
-    print(f"\n总计: {len(seen)} 条去重记忆")
+    logger.info(f"总计: {len(seen)} 条去重记忆")
 
     success = not raw_found and non_llm == 0
     if success:
-        print("\n[结论] 全部通过！所有记忆均为 LLM 提取的结构化事实")
+        logger.info("全部通过！所有记忆均为 LLM 提取的结构化事实")
     else:
-        print("\n[结论] 有异常数据，请检查")
+        logger.warning("有异常数据，请检查")
     return success
 
 
@@ -145,6 +148,7 @@ def verify_memories(user_id: str):
 #  Main
 # ============================================================
 if __name__ == "__main__":
+    setup_logger(console_level=20)  # INFO for standalone CLI
     parser = argparse.ArgumentParser(description="清理/验证记忆数据")
     parser.add_argument("--clean", action="store_true", help="删除旧的 ChromaDB collection")
     parser.add_argument("--verify", action="store_true", help="验证存储的记忆是否均为 LLM 提取的")
@@ -153,14 +157,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.clean:
-        print("=== 清理旧数据 ===")
+        logger.info("=== 清理旧数据 ===")
         clean_chromadb()
 
     if args.reimport:
         if not args.user_id:
-            print("--reimport 需要 --user-id 参数")
+            logger.warning("--reimport 需要 --user-id 参数")
             sys.exit(1)
-        print(f"\n=== 重新导入 (user_id={args.user_id}) ===")
+        logger.info(f"=== 重新导入 (user_id={args.user_id}) ===")
         from parse_wechat import import_markdown_file
         from memory.memory_manager import DEFAULT_MEM0_CONFIG
         from mem0 import Memory
@@ -170,9 +174,9 @@ if __name__ == "__main__":
 
     if args.verify:
         if not args.user_id:
-            print("--verify 需要 --user-id 参数")
+            logger.warning("--verify 需要 --user-id 参数")
             sys.exit(1)
-        print(f"\n=== 验证存储记忆 (user_id={args.user_id}) ===")
+        logger.info(f"=== 验证存储记忆 (user_id={args.user_id}) ===")
         verify_memories(args.user_id)
 
     if not any([args.clean, args.verify, args.reimport]):

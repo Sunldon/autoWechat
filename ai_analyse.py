@@ -2,14 +2,13 @@ import base64
 import json
 import sys
 import os
-
+import traceback
 # ============ 强制离线：必须在 HuggingFace 库导入前设置 ============
 os.environ.pop("HF_ENDPOINT", None)
 os.environ.pop("HUGGINGFACE_HUB_ENDPOINT", None)
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["HF_HUB_OFFLINE"] = "1"
 
-import logging
 from typing import Optional
 from difflib import SequenceMatcher
 from datetime import datetime
@@ -23,6 +22,9 @@ from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from sqlalchemy import text
 import re
+
+from logger import get_logger
+logger = get_logger(__name__)
 
 # 导入配置
 from config import CHAT_MODEL_CONFIG, VISION_MODEL_CONFIG, DEBUG_CONFIG, USER_CONFIG, MEMORY_CONFIG, _config
@@ -45,26 +47,6 @@ if _hooks_cfg.get("enabled", True):
     _dup_cfg = _hooks_cfg.get("duplicate", {})
     if _dup_cfg.get("enabled", True):
         _hook_chain.add(DuplicateHook(similarity_threshold=_dup_cfg.get("similarity_threshold", 0.5)))
-
-# ============ 日志配置 ============
-logging.basicConfig(
-    level=logging.WARNING,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%H:%M:%S",
-)
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
-# 抑制第三方库日志
-for lib in (
-    "httpx",
-    "chromadb",
-    "sentence_transformers",
-    "urllib3",
-    "requests",
-):
-    logging.getLogger(lib).setLevel(logging.WARNING)
 
 # ============ 初始化 LLM ============
 # 聊天模型（用于回复消息）
@@ -329,8 +311,8 @@ def invoke_react(messages: list, max_steps: int = 3, llm_model_with_tools=None) 
 
         response = llm_model_with_tools.invoke(history)
         # 打印完整 AIMessage
-        print("\n[AI RESPONSE]")
-        print(response)
+        logger.debug("\n[AI RESPONSE]")
+        logger.debug(response)
 
         tool_calls = getattr(response, "tool_calls", None)
 
@@ -424,6 +406,7 @@ def reflect_and_refine(draft_reply: str, chat_text: str, abandon: str) -> str:
         return content
     except Exception as e:
         logger.error(f"反思修正阶段抛出异常: {e}")
+        logger.error(traceback.format_exc())
         return draft_reply  # 异常时兜底返回初版草稿
 
 
@@ -447,7 +430,7 @@ def chat_with_digital_twin(
     """
 
     twin_content = load_digital_twin()
-
+    retrieved_memories = ""
     # ===== 记忆检索 =====
     if use_history:
         if memory_manager and user_id:
@@ -459,8 +442,6 @@ def chat_with_digital_twin(
                     break
 
             retrieved_memories = memory_manager.read_context(latest_msg, user_id)
-    else:
-        retrieved_memories = ""
 
     try:
         advices = ""
@@ -506,9 +487,9 @@ def chat_with_digital_twin(
             suggestions = suggestions_match.group(1).strip() if suggestions_match else ""
 
             # ---- 打印结果测试 ----
-            print(f"【是否通过】:\n{is_pass}\n" + "-"*30)
-            print(f"【存在问题】:\n{issues}\n" + "-"*30)
-            print(f"【参考答复】:\n{suggestions}")
+            logger.debug(f"【是否通过】:\n{is_pass}\n" + "-"*30)
+            logger.debug(f"【存在问题】:\n{issues}\n" + "-"*30)
+            logger.debug(f"【参考答复】:\n{suggestions}")
 
             if is_pass == "PASS":
                 logger.info("反思链审核通过，进入 Hooks 校验")
@@ -541,6 +522,7 @@ def chat_with_digital_twin(
         return None
 
     except Exception as e:
+        logger.error(traceback.format_exc())
         logger.error(f"对话生成失败: {e}")
         return "我刚才走神了，再说一遍？"
 
@@ -566,9 +548,12 @@ def check_duplicate_messages(
 
 # ============ Main ============
 if __name__ == "__main__":
-    print("\n" + "=" * 50)
-    print("微信数字分身测试")
-    print("=" * 50)
+    from logger import setup_logger
+    setup_logger(console_level=20)  # INFO for standalone CLI
+
+    logger.info("=" * 50)
+    logger.info("微信数字分身测试")
+    logger.info("=" * 50)
 
     import argparse
 
@@ -588,23 +573,23 @@ if __name__ == "__main__":
     screenshot_path = DEBUG_CONFIG["screenshot_path"]
 
     if not os.path.exists(screenshot_path):
-        print(f"截图不存在: {screenshot_path}")
+        logger.error(f"截图不存在: {screenshot_path}")
         sys.exit(0)
 
     # ===== 解析截图 =====
     model_output = ai_get_messages()
 
     if not model_output:
-        print("消息解析失败")
+        logger.error("消息解析失败")
         sys.exit(0)
 
     try:
         messages = json.loads(model_output)
         messages[-1]["text"] = "去打球吗"
         messages[-1]["sender"] = "other"
-        print("\n当前消息结构:")
+        logger.info("当前消息结构:")
         for msg in messages:
-            print(msg)
+            logger.info(f"  {msg}")
 
         from memory.memory_manager import MemoryManager
         memory_manager = MemoryManager()
@@ -618,7 +603,7 @@ if __name__ == "__main__":
             user_id=args.user_id,
         )
 
-        print(f"\n回复: {reply}")
+        logger.info(f"回复: {reply}")
 
         # ===== 重复检测 =====
         duplicate = check_duplicate_messages(
@@ -626,11 +611,10 @@ if __name__ == "__main__":
             reply,
         )
 
-        print(f"重复检测: {duplicate}")
+        logger.info(f"重复检测: {duplicate}")
 
     except json.JSONDecodeError as e:
-        print(f"JSON解析失败: {e}")
-        print("原始输出:")
-        print(model_output)
+        logger.error(f"JSON解析失败: {e}")
+        logger.error(f"原始输出: {model_output}")
 
     sys.exit(0)

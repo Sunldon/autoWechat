@@ -7,22 +7,16 @@ import time
 import pyperclip
 import json
 import argparse
-import logging
 from pathlib import Path
 
 # 配置
 import os
 
+from logger import get_logger
+logger = get_logger(__name__)
+
 # 导入项目配置
 from config import WINDOW_CONFIG, DEBUG_CONFIG, CAPTURE_CONFIG, SEARCH_CONFIG
-
-# ============ 日志配置 ============
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%H:%M:%S",
-)
-logger = logging.getLogger(__name__)
 
 
 # ============ 核心函数 ============
