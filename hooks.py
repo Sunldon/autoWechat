@@ -19,8 +19,16 @@ class LengthHook:
 
     def check(self, reply: str, **kwargs) -> HookResult:
         if len(reply) > self.max_chars:
+            truncated = reply[:self.max_chars]
+            last_punct = max(
+                truncated.rfind(p)
+                for p in ("。", "！", "？", "，", "；", "、", ".", "!", "?", ",", ";")
+                if p in truncated
+            )
+            if last_punct > 0:
+                truncated = truncated[: last_punct + 1]
             logger.warning(f"[LengthHook] 超长: {len(reply)} > {self.max_chars}")
-            return HookResult(False, reply[:self.max_chars], f"截断至{self.max_chars}字")
+            return HookResult(False, truncated, f"截断至{len(truncated)}字")
         return HookResult(True, reply)
 
 

@@ -387,6 +387,7 @@ def reflect_and_refine(draft_reply: str, chat_text: str, abandon: str) -> str:
 3. **书面语/公文感剔除（重点）**：检查是否使用了虽然通顺但偏书面的词汇（例如：将“刚忙完”写成“处理完事/处理事务”，将“没空”写成“时间不允许”）。真人微信聊天应极其口语化。
 4. **红线审查**：是否提及了[绝对禁止回复]的内容？
 5. **语气与上下文还原度**：是否完全符合前文的说话习惯、亲疏关系和性格？
+6. **上下文关联**：是否与前文相关？是否与前文有逻辑联系？是否出现与前文不相关的内容？
 
 # 输出要求
 **请注意：只要你觉得这句话“不够地道”、“像是一个AI在找借口/回复”，就请拒绝执行 PASS。**
@@ -585,8 +586,8 @@ if __name__ == "__main__":
 
     try:
         messages = json.loads(model_output)
-        messages[-1]["text"] = "去打球吗"
-        messages[-1]["sender"] = "other"
+        # messages[-1]["text"] = "去打球吗"
+        # messages[-1]["sender"] = "other"
         logger.info("当前消息结构:")
         for msg in messages:
             logger.info(f"  {msg}")
