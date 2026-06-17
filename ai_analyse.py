@@ -25,7 +25,26 @@ from sqlalchemy import text
 import re
 
 # 导入配置
-from config import CHAT_MODEL_CONFIG, VISION_MODEL_CONFIG, DEBUG_CONFIG, USER_CONFIG, MEMORY_CONFIG
+from config import CHAT_MODEL_CONFIG, VISION_MODEL_CONFIG, DEBUG_CONFIG, USER_CONFIG, MEMORY_CONFIG, _config
+
+# ============ Hooks 初始化 ============
+from hooks import HookChain, LengthHook, BannedWordsHook, FormatHook, DuplicateHook
+
+_hooks_cfg = _config.get("hooks", {})
+_hook_chain = HookChain()
+if _hooks_cfg.get("enabled", True):
+    _len_cfg = _hooks_cfg.get("length", {})
+    if _len_cfg.get("enabled", True):
+        _hook_chain.add(LengthHook(max_chars=_len_cfg.get("max_chars", 15)))
+    _bw_cfg = _hooks_cfg.get("banned_words", {})
+    if _bw_cfg.get("enabled", True):
+        _hook_chain.add(BannedWordsHook(banned_words=_bw_cfg.get("words", [])))
+    _fmt_cfg = _hooks_cfg.get("format", {})
+    if _fmt_cfg.get("enabled", True):
+        _hook_chain.add(FormatHook())
+    _dup_cfg = _hooks_cfg.get("duplicate", {})
+    if _dup_cfg.get("enabled", True):
+        _hook_chain.add(DuplicateHook(similarity_threshold=_dup_cfg.get("similarity_threshold", 0.5)))
 
 # ============ 日志配置 ============
 logging.basicConfig(
@@ -385,14 +404,14 @@ def reflect_and_refine(draft_reply: str, chat_text: str, abandon: str) -> str:
 2. **大模型说教味/小作文**：真人微信聊天讲究短小、随性、碎片化。初版回复是否太长、太严谨？
 3. **书面语/公文感剔除（重点）**：检查是否使用了虽然通顺但偏书面的词汇（例如：将“刚忙完”写成“处理完事/处理事务”，将“没空”写成“时间不允许”）。真人微信聊天应极其口语化。
 4. **红线审查**：是否提及了[绝对禁止回复]的内容？
-5. **语气与上下文还原度**：是否完全符合前文的说话习惯、亲疏关系和性格？标点符号的使用是否自然（如：真人很少在微信短句末尾加句号）？
+5. **语气与上下文还原度**：是否完全符合前文的说话习惯、亲疏关系和性格？
 
 # 输出要求
 **请注意：只要你觉得这句话“不够地道”、“像是一个AI在找借口/回复”，就请拒绝执行 PASS。**
 请严格按照以下格式输出，并且不要添加任何多余的解释或文本：
 [是否通过]: PASS / FAIL
 [存在问题]：如果未通过，请详细指出初版回复中存在的所有问题
-[改进建议]：如果未通过，请给出的改进建议
+[参考答复]：如果未通过，请一句话给出参考答复
 """
 
     try:
@@ -478,8 +497,8 @@ def chat_with_digital_twin(
 
             # 使用正则匹配核心标签，兼容中英文冒号和换行
             pass_match = re.search(r"\[是否通过\][:：]\s*(.*)", reflect_reply)
-            issues_match = re.search(r"\[存在问题\][:：]\s*([\s\S]*?)(?=\[改进建议\]|$)", reflect_reply)
-            suggestions_match = re.search(r"\[改进建议\][:：]\s*([\s\S]*)", reflect_reply)
+            issues_match = re.search(r"\[存在问题\][:：]\s*([\s\S]*?)(?=\[参考答复\]|$)", reflect_reply)
+            suggestions_match = re.search(r"\[参考答复\][:：]\s*([\s\S]*)", reflect_reply)
 
             # 提取并清洗数据（去掉首尾空格）
             is_pass = pass_match.group(1).strip() if pass_match else ""
@@ -489,24 +508,36 @@ def chat_with_digital_twin(
             # ---- 打印结果测试 ----
             print(f"【是否通过】:\n{is_pass}\n" + "-"*30)
             print(f"【存在问题】:\n{issues}\n" + "-"*30)
-            print(f"【改进建议】:\n{suggestions}")
+            print(f"【参考答复】:\n{suggestions}")
 
             if is_pass == "PASS":
-                logger.info("反思链审核通过，保持原回复")
+                logger.info("反思链审核通过，进入 Hooks 校验")
+                # ===== Hooks 确定性校验 =====
+                hook_result = _hook_chain.run(reply.strip(), user_id=user_id)
+                if not hook_result.passed:
+                    logger.info(f"Hooks 拦截: {hook_result.reason}，重试")
+                    advices = f"上一轮回复被拦截: {hook_result.reason}，请换一种方式回复"
+                    continue
                 # ===== 记忆存储 =====
                 if memory_manager and user_id and use_history:
                     memory_manager.store_context(user_input, user_id)
-                return reply.strip()
-            advices = suggestions
+                return hook_result.reply
+            advices = issues
             if i == 2:
                 logger.warning("已达最大尝试次数，使用最后一次反思建议作为回复")
                 if "Action" in reply:
                     logger.info("检测到回复中包含工具调用，保留原回复以确保功能执行")
                     return None
+                final_reply = suggestions.strip() if suggestions else reply.strip()
+                # ===== Hooks 确定性校验（兜底） =====
+                hook_result = _hook_chain.run(final_reply, user_id=user_id)
+                if not hook_result.passed:
+                    logger.warning(f"兜底回复仍被 Hooks 拦截: {hook_result.reason}，使用截断结果")
+                    final_reply = hook_result.reply
                 # ===== 记忆存储 =====
                 if memory_manager and user_id and use_history:
                     memory_manager.store_context(user_input, user_id)
-                return reply.strip()
+                return final_reply
         return None
 
     except Exception as e:

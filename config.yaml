@@ -75,6 +75,29 @@ vision_model:
   model_name: "qwen3-vl-8b-instruct"            # 视觉模型名称（支持视觉的多模态模型）
   max_tokens: 4096                              # 最大输出长度
   temperature: 0.3  
+# ============ Hooks 配置（确定性校验） ============
+hooks:
+  enabled: true
+  length:
+    enabled: true
+    max_chars: 15
+  banned_words:
+    enabled: true
+    words:
+      - "作为AI"
+      - "是AI"
+      - "作为一个人工智能"
+      - "有什么可以帮您"
+      - "请问有什么"
+      - "我来帮你"
+      - "我来为您"
+      - "理解您的感受"
+  format:
+    enabled: true
+  duplicate:
+    enabled: true
+    similarity_threshold: 0.5
+
 # 调试配置
 debug:
   screenshot_path: "debug_last_msg.png"
