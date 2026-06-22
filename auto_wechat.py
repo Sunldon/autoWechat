@@ -13,8 +13,7 @@ import json
 import argparse
 from datetime import datetime
 
-from logger import setup_logger, get_logger
-setup_logger()
+from logger import get_logger
 logger = get_logger(__name__)
 
 from operate_wechat import (

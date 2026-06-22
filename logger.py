@@ -16,6 +16,11 @@ _LOG_DIR = Path(__file__).parent / "logs"
 _INITIALIZED = False
 
 
+def _auto_init():
+    if not _INITIALIZED:
+        setup_logger()
+
+
 def setup_logger(
     log_dir: str | Path = _LOG_DIR,
     console_level: int = logging.INFO,
@@ -72,5 +77,6 @@ def setup_logger(
 
 
 def get_logger(name: str) -> logging.Logger:
-    """获取模块级 logger"""
+    """获取模块级 logger（自动初始化日志配置）"""
+    _auto_init()
     return logging.getLogger(name)

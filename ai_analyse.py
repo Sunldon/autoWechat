@@ -363,6 +363,21 @@ def invoke_react(messages: list, max_steps: int = 3, llm_model_with_tools=None) 
 
     return "我刚卡了一下"
 
+def check_ai_suspicion(user_input: list) -> bool:
+    """检测对方最新消息是否在怀疑我是 AI"""
+    latest_other_msg = ""
+    msg = user_input[-1]
+    if msg["sender"] == "other":
+        latest_other_msg = msg["text"]
+    if not latest_other_msg:
+        return False
+    keywords = ["AI", "ai", "机器人", "大模型", "Ai"]
+    if any(kw in latest_other_msg for kw in keywords):
+        logger.warning(f"对方最新消息疑似怀疑我是 AI: {latest_other_msg}")
+        return True
+    return False
+
+
 def reflect_and_refine(draft_reply: str, chat_text: str, abandon: str) -> str:
     """
     反思与修正模块：对初版回复进行人设、口语化、红线的二次审查
@@ -444,8 +459,22 @@ def chat_with_digital_twin(
 
             retrieved_memories = memory_manager.read_context(latest_msg, user_id)
 
+    # ===== 怀疑检测与策略升级 =====
+    is_suspicious = check_ai_suspicion(user_input)
+    if is_suspicious:
+        logger.warning("检测到对方产生 AI 怀疑！启动避险模式！")
+
     try:
         advices = ""
+        if is_suspicious:
+            advices = """
+【!!!紧急避险指令!!!】
+对方已经开始怀疑你是 AI 机器人了！这一轮回复你必须全力洗清嫌疑！
+1. 绝对禁止正面长篇大论地解释。
+2. 必须极其简短、极其口语化，最好在 10 个字以内。
+3. 允许使用反问句、无意义的语气词（如：哈？、额、干嘛、绝了）、甚至故意打错别字。
+4. 可以采用"装傻、转移话题"的真人策略。例如：'？你没事吧'、'今天吃错药了？'、'笑死，你在说什么'、'你才是ai'。
+"""
         for i in range(3):
             logger.info(f"对话生成尝试 {i + 1}/3")
 
@@ -472,6 +501,8 @@ def chat_with_digital_twin(
                 ),
             ]
             reply = invoke_react(messages)
+            if is_suspicious:
+                return reply  # 避险模式下直接返回初版回复，不进行反思链审查
             reflect_reply = "PASS"
             # 2. 核心改动：接入反思链（剔除异常兜底词）
             if reply not in ["我刚卡了一下", "我刚才走神了，再说一遍？"]:
@@ -498,7 +529,26 @@ def chat_with_digital_twin(
                 hook_result = _hook_chain.run(reply.strip(), user_id=user_id)
                 if not hook_result.passed:
                     logger.info(f"Hooks 拦截: {hook_result.reason}，重试")
-                    advices = f"上一轮回复被拦截: {hook_result.reason}，请换一种方式回复"
+                    advices = f"上一轮回复被拦截（{hook_result.reason}）。{hook_result.suggestion}"
+                    if i == 2:
+                        # ===== 3次尝试均未通过，强制生成最终回复（跳过所有校验） =====
+                        logger.warning("已到达最大次数，hook检测失败，进行最终强制生成")
+                        system_prompt = create_system_prompt(
+                            twin_content,
+                            retrieved_memories,
+                            abandon,
+                            advices,
+                        )                        
+                        messages = [
+                            SystemMessage(content=system_prompt),
+                            HumanMessage(
+                                content=f"聊天记录如下：\n{chat_text}\n\n请直接给出最终回复，一句话即可，不要任何格式"
+                            ),
+                        ]
+                        final_reply = invoke_react(messages)
+                        if memory_manager and user_id and use_history:
+                            memory_manager.store_context(user_input, user_id)
+                        return final_reply
                     continue
                 # ===== 记忆存储 =====
                 if memory_manager and user_id and use_history:
@@ -586,7 +636,7 @@ if __name__ == "__main__":
 
     try:
         messages = json.loads(model_output)
-        # messages[-1]["text"] = "去打球吗"
+        # messages[-1]["text"] = "靠，你用ai跟我聊天"
         # messages[-1]["sender"] = "other"
         logger.info("当前消息结构:")
         for msg in messages:

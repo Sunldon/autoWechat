@@ -1,8 +1,8 @@
 # 微信自动化配置
 wechat:
   window:
-    width: 1000
-    height: 800
+    width: 1200
+    height: 1200
 
   # 用户配置（本人信息）
   user:
@@ -22,7 +22,7 @@ wechat:
   # 聊天区域截取配置，可以调整以适应不同屏幕分辨率和微信窗口布局
   capture:
     left_offset: 400      # 左侧偏移量（跳过左侧联系人栏）
-    top_offset: 90        # 顶部偏移量（跳过标题栏）
+    top_offset: 75        # 顶部偏移量（跳过标题栏）
     bottom_offset: 230   # 底部偏移量（跳过输入栏）,最好调整小一些，保证截图聊天记录完整
   search_position:
     x_offset: 150       # 搜索框相对于窗口左边的水平偏移
@@ -80,7 +80,7 @@ hooks:
   enabled: true
   length:
     enabled: true
-    max_chars: 15
+    max_chars: 30
   banned_words:
     enabled: true
     words:

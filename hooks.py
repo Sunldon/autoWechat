@@ -7,10 +7,11 @@ logger = get_logger(__name__)
 
 
 class HookResult:
-    def __init__(self, passed: bool, reply: str, reason: str = ""):
+    def __init__(self, passed: bool, reply: str, reason: str = "", suggestion: str = ""):
         self.passed = passed
         self.reply = reply
         self.reason = reason
+        self.suggestion = suggestion
 
 
 class LengthHook:
@@ -28,7 +29,11 @@ class LengthHook:
             if last_punct > 0:
                 truncated = truncated[: last_punct + 1]
             logger.warning(f"[LengthHook] 超长: {len(reply)} > {self.max_chars}")
-            return HookResult(False, truncated, f"截断至{len(truncated)}字")
+            return HookResult(
+                False, truncated,
+                f"截断至{len(truncated)}字",
+                f"回复太长（{len(reply)}字），限制{self.max_chars}字以内，请大幅度精简，只保留最核心的信息",
+            )
         return HookResult(True, reply)
 
 
@@ -40,7 +45,11 @@ class BannedWordsHook:
         for word in self.banned_words:
             if word in reply:
                 logger.warning(f"[BannedWordsHook] 命中禁止词: {word}")
-                return HookResult(False, reply, f"包含禁止词「{word}」")
+                return HookResult(
+                    False, reply,
+                    f"包含禁止词「{word}」",
+                    f"回复包含禁止词「{word}」，请换一种完全不提及该词的表达方式",
+                )
         return HookResult(True, reply)
 
 
@@ -60,11 +69,19 @@ class FormatHook:
         for pattern in self.AI_PATTERNS:
             if re.search(pattern, reply):
                 logger.warning(f"[FormatHook] AI腔命中: {pattern}")
-                return HookResult(False, reply, f"AI腔: {pattern}")
+                return HookResult(
+                    False, reply,
+                    f"AI腔: {pattern}",
+                    "回复有AI腔，请用真人日常口语重新表达，避免任何客服式/助理式措辞",
+                )
 
         if re.search(r"```|^\{|^\[.*\]$", reply, re.MULTILINE):
             logger.warning(f"[FormatHook] 疑似代码/JSON格式")
-            return HookResult(False, reply, "包含代码或JSON格式")
+            return HookResult(
+                False, reply,
+                "包含代码或JSON格式",
+                "回复包含代码或JSON格式，请用纯文本自然语言表达",
+            )
 
         return HookResult(True, reply)
 
@@ -80,7 +97,11 @@ class DuplicateHook:
             ratio = SequenceMatcher(None, reply, prev).ratio()
             if ratio > self.similarity_threshold:
                 logger.warning(f"[DuplicateHook] 与历史回复相似: {ratio:.2f}")
-                return HookResult(False, reply, f"与近期回复重复(相似度{ratio:.0%})")
+                return HookResult(
+                    False, reply,
+                    f"与近期回复重复(相似度{ratio:.0%})",
+                    "回复与历史消息过于相似，请换一种完全不同的说法，调整用词、语气和句式",
+                )
 
         if user_id:
             self._recent_replies.setdefault(user_id, []).append(reply)
