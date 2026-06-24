@@ -13,14 +13,7 @@ from typing import Optional
 from difflib import SequenceMatcher
 from datetime import datetime
 
-from langchain_core.messages import (
-    HumanMessage,
-    SystemMessage,
-    ToolMessage,
-)
-from langchain_openai import ChatOpenAI
-from langchain_core.tools import tool
-from sqlalchemy import text
+from openai import OpenAI
 import re
 
 from logger import get_logger
@@ -50,25 +43,28 @@ if _hooks_cfg.get("enabled", True):
 
 # ============ 初始化 LLM ============
 # 聊天模型（用于回复消息）
-chat_llm = ChatOpenAI(
-    model=CHAT_MODEL_CONFIG["model_name"],
-    openai_api_base=CHAT_MODEL_CONFIG["api_base"],
-    openai_api_key=CHAT_MODEL_CONFIG["api_key"],
-    max_tokens=CHAT_MODEL_CONFIG["max_tokens"],
-    temperature=CHAT_MODEL_CONFIG["temperature"],
+chat_client = OpenAI(
+    api_key=CHAT_MODEL_CONFIG["api_key"],
+    base_url=CHAT_MODEL_CONFIG["api_base"],
 )
+chat_model = CHAT_MODEL_CONFIG["model_name"]
+chat_kwargs = {
+    "max_tokens": CHAT_MODEL_CONFIG["max_tokens"],
+    "temperature": CHAT_MODEL_CONFIG["temperature"],
+}
 
 # 视觉模型（用于解析图片）
-vision_llm = ChatOpenAI(
-    model=VISION_MODEL_CONFIG["model_name"],
-    openai_api_base=VISION_MODEL_CONFIG["api_base"],
-    openai_api_key=VISION_MODEL_CONFIG["api_key"],
-    max_tokens=VISION_MODEL_CONFIG["max_tokens"],
-    temperature=VISION_MODEL_CONFIG["temperature"],
+vision_client = OpenAI(
+    api_key=VISION_MODEL_CONFIG["api_key"],
+    base_url=VISION_MODEL_CONFIG["api_base"],
 )
+vision_model = VISION_MODEL_CONFIG["model_name"]
+vision_kwargs = {
+    "max_tokens": VISION_MODEL_CONFIG["max_tokens"],
+    "temperature": VISION_MODEL_CONFIG["temperature"],
+}
 
 # ============ Tools ============
-@tool
 def get_current_time() -> str:
     """
     获取当前日期和时间
@@ -76,7 +72,6 @@ def get_current_time() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
-@tool
 def web_search(query: str) -> str:
     """搜索网络获取实时信息，当遇到不懂的名词、概念或需要最新资讯时使用"""
     try:
@@ -100,11 +95,37 @@ TOOLS = {
     "web_search": web_search,
 }
 
-# 为聊天模型绑定工具
-chat_llm_with_tools = chat_llm.bind_tools(list(TOOLS.values()))
-
-# 为视觉模型也绑定相同的工具（如果需要）
-vision_llm_with_tools = vision_llm.bind_tools(list(TOOLS.values()))
+TOOLS_SCHEMAS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_current_time",
+            "description": "获取当前日期和时间",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "搜索网络获取实时信息，当遇到不懂的名词、概念或需要最新资讯时使用",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "搜索关键词",
+                    }
+                },
+                "required": ["query"],
+            },
+        },
+    },
+]
 
 # ============ 辅助函数 ============
 def is_similar(a: str, b: str) -> bool:
@@ -172,8 +193,9 @@ def ai_get_messages() -> Optional[str]:
 """
 
     messages = [
-        HumanMessage(
-            content=[
+        {
+            "role": "user",
+            "content": [
                 {
                     "type": "image_url",
                     "image_url": {
@@ -184,15 +206,19 @@ def ai_get_messages() -> Optional[str]:
                     "type": "text",
                     "text": prompt,
                 },
-            ]
-        )
+            ],
+        }
     ]
 
     try:
         # 使用视觉模型进行图片解析
-        response = vision_llm.invoke(messages)
+        response = vision_client.chat.completions.create(
+            model=vision_model,
+            messages=messages,
+            **vision_kwargs,
+        )
 
-        content = response.content.strip()
+        content = response.choices[0].message.content.strip()
 
         format_content = ""
 
@@ -295,50 +321,63 @@ def create_system_prompt(
 
 
 # ============ ReAct 执行器 ============
-def invoke_react(messages: list, max_steps: int = 3, llm_model_with_tools=None) -> str:
+def invoke_react(messages: list, max_steps: int = 3) -> str:
     """
     ReAct Tool Calling 循环
     """
-    
-    # 如果没有指定模型，默认使用聊天模型
-    if llm_model_with_tools is None:
-        llm_model_with_tools = chat_llm_with_tools
 
     history = messages[:]
 
     for step in range(max_steps):
         logger.info(f"ReAct Step: {step + 1}")
 
-        response = llm_model_with_tools.invoke(history)
-        # 打印完整 AIMessage
+        response = chat_client.chat.completions.create(
+            model=chat_model,
+            messages=history,
+            tools=TOOLS_SCHEMAS,
+            **chat_kwargs,
+        )
+        msg = response.choices[0].message
         logger.debug("\n[AI RESPONSE]")
-        logger.debug(response)
+        logger.debug(msg)
 
-        tool_calls = getattr(response, "tool_calls", None)
+        tool_calls = msg.tool_calls
 
         # 不需要工具
         if not tool_calls:
-            # final_text = response.content.strip()
-            # 解析最终回复文本
-            if "Final:" in response.content:
-                final_reply = response.content.split("Final:")[-1].strip()
-            elif "Final" in response.content:
-                final_reply = response.content.split("Final")[-1].strip()
+            content = msg.content or ""
+            if "Final:" in content:
+                final_reply = content.split("Final:")[-1].strip()
+            elif "Final" in content:
+                final_reply = content.split("Final")[-1].strip()
             else:
-                # 兜底：若未按格式输出，提取最后一行非空行
-                lines = [line.strip() for line in response.content.split("\n") if line.strip()]
-                final_reply = lines[-1]
+                lines = [line.strip() for line in content.split("\n") if line.strip()]
+                final_reply = lines[-1] if lines else content
 
             logger.info(f"react 回复: {final_reply}")
             return final_reply
 
-        history.append(response)
+        history.append({
+            "role": "assistant",
+            "content": msg.content,
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in tool_calls
+            ],
+        })
 
         # 执行工具
-        for call in tool_calls:
-            tool_name = call.get("name")
-            tool_args = call.get("args", {})
-            tool_call_id = call.get("id")
+        for tc in tool_calls:
+            tool_name = tc.function.name
+            tool_args = json.loads(tc.function.arguments)
+            tool_call_id = tc.id
 
             logger.info(f"调用工具: {tool_name}")
 
@@ -348,18 +387,17 @@ def invoke_react(messages: list, max_steps: int = 3, llm_model_with_tools=None) 
                 result = f"未知工具: {tool_name}"
             else:
                 try:
-                    result = tool_func.invoke(tool_args)
+                    result = tool_func(**tool_args)
                 except Exception as e:
                     result = f"工具调用失败: {e}"
 
             logger.info(f"工具返回: {result}")
 
-            history.append(
-                ToolMessage(
-                    content=str(result),
-                    tool_call_id=tool_call_id,
-                )
-            )
+            history.append({
+                "role": "tool",
+                "content": str(result),
+                "tool_call_id": tool_call_id,
+            })
 
     return "我刚卡了一下"
 
@@ -413,9 +451,13 @@ def reflect_and_refine(draft_reply: str, chat_text: str, abandon: str) -> str:
 """
 
     try:
-        # 反思阶段不需要工具调用，直接使用基础 chat_llm 即可
-        response = chat_llm.invoke([HumanMessage(content=reflect_prompt)])
-        content = response.content.strip()
+        # 反思阶段不需要工具调用，直接使用 chat_client 即可
+        response = chat_client.chat.completions.create(
+            model=chat_model,
+            messages=[{"role": "user", "content": reflect_prompt}],
+            **chat_kwargs,
+        )
+        content = response.choices[0].message.content.strip()
         logger.info(f"反思链完整输出:\n{content}")
 
         # 解析最终回复文本
@@ -493,12 +535,9 @@ def chat_with_digital_twin(
                     for msg in user_input
                 ]
             )
-            # print(f"系统提示:\n{system_prompt}")
             messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(
-                    content=f"聊天记录如下：\n{chat_text}"
-                ),
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"聊天记录如下：\n{chat_text}"},
             ]
             reply = invoke_react(messages)
             if is_suspicious:
@@ -540,10 +579,8 @@ def chat_with_digital_twin(
                             advices,
                         )                        
                         messages = [
-                            SystemMessage(content=system_prompt),
-                            HumanMessage(
-                                content=f"聊天记录如下：\n{chat_text}\n\n请直接给出最终回复，一句话即可，不要任何格式"
-                            ),
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": f"聊天记录如下：\n{chat_text}\n\n请直接给出最终回复，一句话即可，不要任何格式"},
                         ]
                         final_reply = invoke_react(messages)
                         if memory_manager and user_id and use_history:

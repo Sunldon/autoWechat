@@ -6,10 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "chromadb>=1.5.7",
-    "langchain>=0.3.0",
-    "langchain-core>=0.3.0",
-    "langchain-community>=0.3.0",
-    "langchain-openai>=0.2.0",
+    "openai>=1.0.0",
     "numpy>=2.2.6",
     "opencv-python>=4.13.0.92",
     "pillow>=12.2.0",

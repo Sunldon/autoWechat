@@ -1,7 +1,6 @@
 from typing import Optional
 
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage
+from openai import OpenAI
 
 from config import CHAT_MODEL_CONFIG
 from logger import get_logger
@@ -23,18 +22,15 @@ class ShortTermMemory:
         # user_id -> 摘要字符串
         self._summaries: dict[str, str] = {}
         # 用于摘要的 LLM（延迟初始化）
-        self._summary_llm: Optional[ChatOpenAI] = None
+        self._summary_client: Optional[OpenAI] = None
 
-    def _get_llm(self) -> ChatOpenAI:
-        if self._summary_llm is None:
-            self._summary_llm = ChatOpenAI(
-                model=CHAT_MODEL_CONFIG["model_name"],
-                openai_api_base=CHAT_MODEL_CONFIG["api_base"],
-                openai_api_key=CHAT_MODEL_CONFIG["api_key"],
-                max_tokens=512,
-                temperature=0.3,
+    def _get_client(self) -> OpenAI:
+        if self._summary_client is None:
+            self._summary_client = OpenAI(
+                api_key=CHAT_MODEL_CONFIG["api_key"],
+                base_url=CHAT_MODEL_CONFIG["api_base"],
             )
-        return self._summary_llm
+        return self._summary_client
 
     def update(self, messages: list[dict], user_id: str):
         """更新短期记忆窗口
@@ -83,8 +79,13 @@ class ShortTermMemory:
             f"保留关键事实、话题和人物信息：\n\n{text}\n\n摘要："
         )
         try:
-            response = self._get_llm().invoke([HumanMessage(content=prompt)])
-            return response.content.strip()
+            response = self._get_client().chat.completions.create(
+                model=CHAT_MODEL_CONFIG["model_name"],
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=512,
+                temperature=0.3,
+            )
+            return response.choices[0].message.content.strip()
         except Exception as e:
             logger.error(f"摘要压缩失败: {e}")
             # 兜底：截取前 100 字

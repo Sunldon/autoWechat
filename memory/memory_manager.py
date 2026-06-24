@@ -1,7 +1,11 @@
-﻿from collections import OrderedDict, deque
+﻿import logging
 import os
 import re
+from collections import OrderedDict, deque
 from typing import Optional
+
+# 抑制 mem0 chroma 的冗余 INFO 日志
+logging.getLogger("mem0.vector_stores.chroma").setLevel(logging.WARNING)
 
 from rank_bm25 import BM25Okapi
 
@@ -786,7 +790,7 @@ class MemoryManager:
 
         if memory_texts:
             parts.append("[长期记忆]\n" + "\n".join(memory_texts))
-            logger.info(f"检索完成 [{user_id}]: 注入 {len(memory_texts)} 条记忆")
+            logger.info(f"检索完成 [{user_id}]: 注入记忆：{memory_texts}")
         else:
             logger.info(f"检索完成 [{user_id}]: 无相关记忆")
 
@@ -859,7 +863,7 @@ class MemoryManager:
 
         # 2. 更新短期记忆窗口（也只用新消息）
         self.short_term.update(new_messages, user_id)
-        logger.debug(f"短期记忆更新完成 [{user_id}]: {len(new_messages)} 条新消息")
+        logger.info(f"短期记忆更新完成 [{user_id}]: {len(new_messages)} 条新消息")
 
     def get_all_memories(self, user_id: str, top_k: int = 1000) -> list:
         """获取用户的所有记忆（用于调试）"""
