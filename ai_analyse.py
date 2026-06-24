@@ -20,7 +20,7 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 # 导入配置
-from config import CHAT_MODEL_CONFIG, VISION_MODEL_CONFIG, DEBUG_CONFIG, USER_CONFIG, MEMORY_CONFIG, _config
+from config import CHAT_MODEL_CONFIG, VISION_MODEL_CONFIG, DEBUG_CONFIG, USER_CONFIG, _config
 
 # ============ Hooks 初始化 ============
 from hooks import HookChain, LengthHook, BannedWordsHook, FormatHook, DuplicateHook
@@ -492,7 +492,7 @@ def chat_with_digital_twin(
     # ===== 记忆检索 =====
     if use_history:
         if memory_manager and user_id:
-            # MemoryManager 检索（Mem0 + 短期记忆）
+            # MemoryManager 检索（文件记忆 + 短期记忆）
             latest_msg = ""
             for msg in reversed(user_input):
                 if msg["sender"] == "other":

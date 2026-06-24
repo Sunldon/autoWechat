@@ -27,54 +27,42 @@ wechat:
   search_position:
     x_offset: 150       # 搜索框相对于窗口左边的水平偏移
     y_offset: 40        # 搜索框相对于窗口顶部的垂直偏移
-# ============ 记忆模块配置 (Mem0) ============
+
+# ============ 记忆模块配置（文件存储） ============
 memory:
   enabled: true
-  # 窗口大小（对话轮数）
   window_size: 10
-  # Mem0 LLM 配置（复用聊天模型的 LM Studio 地址）
+  # LLM 配置（三合一：提取 + 合并 + 选择器共用）
   llm:
-    provider: "openai"
-    model: "qwen/qwen3.5-9b"
+    model: "qwen3-vl-8b-instruct"
     openai_base_url: "http://localhost:1234/v1"
     api_key: "not-needed"
-  # 嵌入模型配置（复用本地的 BGE-M3）
-  embedder:
-    provider: "huggingface"
-    model: "./models/BAAI/bge-m3"
-    device: "cpu"
-    embedding_dims: 1024
-  # 向量数据库配置
-  vector_store:
-    collection_name: "wechat_history"
-    path: "./chat_db"
-  # 检索增强配置（HyDE / BM25 / Reranker）
+  # 文件存储配置
+  file_memory:
+    path: "./memory_files"
+    max_lines: 30             # 单个分类文件最多保留行数，超出裁掉旧条目
+  # 检索配置
   search:
-    hyde_max_chars: 3        # 查询字符数 ≤ 此值时跳过 HyDE（方案A）
-    hybrid_search: true      # 开启 BM25 + 向量混合检索（方案B）
-    bm25_weight: 1         # BM25 结果的 RRF 融合权重（越大越偏向关键词匹配）
-    score_threshold: 0.96    # 严格分数过滤（方案C）
+    hyde_max_chars: 3        # 查询字符数 ≤ 此值时跳过 HyDE
     top_k: 5                 # 最终注入 prompt 的记忆条数
-    reranker:
-      enabled: true          # 使用 mem0 内置 Cross-Encoder 精排
-      model: "BAAI/bge-reranker-v2-m3"
 
 # LM Studio / Qwen3-VL 模型配置
 # 聊天模型配置
 chat_model:
-  api_base: "http://localhost:1234/v1"  # 修正URL格式
+  api_base: "http://localhost:1234/v1"
   api_key: "lm-studio"
   model_name: "qwen/qwen3.5-9b"
   max_tokens: 10240
-  temperature: 0.7                            # 创造性参数 (0-1)
+  temperature: 0.7
 
 # 视觉模型配置（用于图片解析）
 vision_model:
-  api_base: "http://localhost:1234/v1"          # 视觉模型 API 地址
-  api_key: "lm-studio"                          # 视觉模型 API 密钥
-  model_name: "qwen3-vl-8b-instruct"            # 视觉模型名称（支持视觉的多模态模型）
-  max_tokens: 4096                              # 最大输出长度
-  temperature: 0.3  
+  api_base: "http://localhost:1234/v1"
+  api_key: "lm-studio"
+  model_name: "qwen3-vl-8b-instruct"
+  max_tokens: 4096
+  temperature: 0.3
+
 # ============ Hooks 配置（确定性校验） ============
 hooks:
   enabled: true

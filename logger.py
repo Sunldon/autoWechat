@@ -1,16 +1,7 @@
 import logging
 import logging.handlers
 import os
-import sys
 from pathlib import Path
-
-
-class _MainNameFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        if record.name == "__main__":
-            main = Path(sys.argv[0]).stem
-            record.name = f"<{main}>"
-        return True
 
 _LOG_DIR = Path(__file__).parent / "logs"
 _INITIALIZED = False
@@ -45,7 +36,7 @@ def setup_logger(
     root.setLevel(min(console_level, file_level))
 
     fmt = logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d) - %(message)s",
+        "%(asctime)s [%(levelname)s] (%(filename)s:%(lineno)d) - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
@@ -61,18 +52,14 @@ def setup_logger(
     console_handler = logging.StreamHandler()
     console_handler.setLevel(console_level)
     console_handler.setFormatter(logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d) - %(message)s",
+        "%(asctime)s [%(levelname)s] (%(filename)s:%(lineno)d) - %(message)s",
         datefmt="%H:%M:%S",
     ))
-
-    _filter = _MainNameFilter()
-    file_handler.addFilter(_filter)
-    console_handler.addFilter(_filter)
 
     root.addHandler(file_handler)
     root.addHandler(console_handler)
 
-    for noisy in ("httpx", "httpcore", "openai", "chromadb", "sentence_transformers", "urllib3", "requests"):
+    for noisy in ("httpx", "httpcore", "openai", "urllib3", "requests"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 

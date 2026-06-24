@@ -13,11 +13,7 @@
 ### 2. 安装依赖
 
 ```bash
-# 使用 uv 安装
 uv sync
-
-# 或手动安装
-pip install -r requirements.txt
 ```
 
 ### 3. 配置环境变量
@@ -30,8 +26,7 @@ cp .env.example .env
 
 编辑 `.env` 文件：
 
-VISION_MODEL_name必须要多模态的大模型，支持图片识别。
-CHAT_MODEL_NAME可以和VISION_MODEL_NAME一样。
+VISION_MODEL_NAME 必须是多模态大模型，支持图片识别。MEMORY_MODEL_NAME 可与 CHAT_MODEL_NAME 共用。
 
 ```env
 # LM Studio API 配置
@@ -41,28 +36,32 @@ CHAT_MODEL_NAME=qwen/qwen3.5-9b
 
 VISION_API_BASE=http://localhost:1234/v1
 VISION_API_KEY=lm-studio
-VISION_MODEL_NAME=qwen3-vl-8b-instructt
+VISION_MODEL_NAME=qwen3-vl-8b-instruct
+
+MEMORY_API_BASE=http://localhost:1234/v1
+MEMORY_API_KEY=not-needed
+MEMORY_MODEL_NAME=qwen3-vl-8b-instruct
 ```
 
-### 4. 导入聊天记录
+### 4. 生成长期记忆档案
 
-聊天记录的功能是用于搜索历史聊天是否有相同问答，用于辅助ai生成答复。若不想导出聊天记录，使用历史回溯，可以跳过这一步。
+从聊天记录中提取人物特征和关系，生成结构化记忆文件，辅助 AI 生成更贴切的回复。若不需要之前的记忆，可跳过。
 
 准备工作：
 
-根据https://github.com/Sunldon/fork-WeChatMsg.git项目导出qq聊天记录，会生成wechat_cleaned.md，放置于当前项目根目录下
+根据 https://github.com/Sunldon/fork-WeChatMsg.git 导出微信聊天记录为 `wechat_cleaned.md`，放置于项目根目录。
 
-首次运行时，需要下载向量数据库bge-m3，下载到当前目录下models/bge-m3，可以从ModelScope或者hf-mirror.com下，下面的命令也可以下载
+执行命令生成记忆档案（结果在 `memory_files/{联系人}/` 目录下）：
 
-```
-uv run python download_models.py
+```bash
+# 从聊天记录生成（指定联系人名称）
+uv run python parse_wechat.py --generate --user-id 张三
+
+# 清空旧档案重新生成
+uv run python parse_wechat.py --generate --user-id 张三 --reset
 ```
 
-执行命令，将当前目录下的wechat_cleaned.md 导入向量数据库
-
-```
-uv run python parse_wechat.py --parse
-```
+记忆以 Markdown 文件存储，每人一个目录，含 3 个分类：个人特征、喜好偏好、关系性事实。
 
 ### 5. 生成person人物性格
 
@@ -79,9 +78,7 @@ Mode                 LastWriteTime         Length Name
 -a----         2026/4/23     15:48           3497 SKILL.md  
 ```
 
-如果第4步未执行，而immortal-skill需要依赖聊天记录蒸馏自己，为了使用特定人格进行回复，可以使用现成的[永生.skill — 把任何人从聊天记录里蒸馏出来](https://agenworld.com/market)，使用各种名人的性格来进行回复消息。
-
-或者使用nuwa-skill生成SKILL.md，放再person目录下
+也可从 [永生.skill](https://agenworld.com/market) 市场获取现成的人物性格，或使用 nuwa-skill 蒸馏生成，放入 `person/` 目录。
 
 ### 6. 运行程序
 
@@ -109,24 +106,14 @@ wechat:
     name: "张三"       # 用户姓名
 ```
 
-若没有导入聊天记录，不依赖聊天记录启动：
+运行主程序：
 
 ```bash
-# 运行主程序
+# 使用长期记忆（推荐）
+uv run python auto_wechat.py
+
+# 不使用长期记忆
 uv run python auto_wechat.py --no-history
-
-# 或直接运行
-python auto_wechat.py --no-history
-```
-
-有导入聊天记录，启动：
-
-```
-# 运行主程序
-uv run python auto_wechat.py --no-history
-
-# 或直接运行
-python auto_wechat.py --no-history
 ```
 
 若运行出现问题，可以按照下面的模块说明，逐步排查
@@ -183,11 +170,11 @@ uv run python ai_analyse.py
       ai_analyse.py (ai_get_messages)
       调用 Qwen3-VL (LM Studio) 解析聊天界面 → JSON 消息列表
          ↓
-      parse_wechat.py (query_context)
-      ChromaDB 检索相关历史回复作为上下文
+      memory_manager.py (read_context)
+      文件记忆 + LLM 选择器检索相关长期记忆
          ↓
       ai_analyse.py (chat_with_digital_twin)
-      调用 Qwen3-VL 生成符合人格的回复
+      调用 Qwen3.5-9b 生成符合人格的回复
          ↓
       operate_wechat.py (send_message_chinese)
       剪贴板 + Ctrl+V 发送文字
@@ -233,7 +220,7 @@ chat_model:
   api_key: "lm-studio"
   model_name: "qwen/qwen3.5-9b"
   max_tokens: 10240
-  temperature: 0.7                            # 创造性参数 (0-1)
+  temperature: 0.7
 
 # 视觉模型配置（用于图片解析）
 vision_model:
@@ -241,6 +228,19 @@ vision_model:
   api_key: "lm-studio"                          # 视觉模型 API 密钥
   model_name: "qwen3-vl-8b-instruct"            # 视觉模型名称（支持视觉的多模态模型）
   max_tokens: 4096                              # 最大输出长度
+
+# 记忆模块（文件存储）
+memory:
+  enabled: true
+  llm:
+    model: "qwen3-vl-8b-instruct"
+    openai_base_url: "http://localhost:1234/v1"
+    api_key: "not-needed"
+  file_memory:
+    path: "./memory_files"
+    max_lines: 60         # 单分类文件最大行数，超出由 LLM 压缩合并
+  search:
+    top_k: 5
 
 # 调试配置
 debug:
@@ -252,14 +252,20 @@ debug:
 优先级高于 config.yaml 的环境变量配置。CHAT_MODEL_NAME可以和VISION_MODEL_NAME一样。
 
 ```env
-# LM Studio API 配置
+# 聊天模型（生成回复）
 CHAT_API_BASE=http://localhost:1234/v1
 CHAT_API_KEY=lm-studio
 CHAT_MODEL_NAME=qwen/qwen3.5-9b
 
+# 视觉模型（解析微信截图）
 VISION_API_BASE=http://localhost:1234/v1
 VISION_API_KEY=lm-studio
 VISION_MODEL_NAME=qwen3-vl-8b-instruct
+
+# 记忆模型（提取+合并+检索）
+MEMORY_API_BASE=http://localhost:1234/v1
+MEMORY_API_KEY=not-needed
+MEMORY_MODEL_NAME=qwen3-vl-8b-instruct
 ```
 
 **说明：** `.env` 中的配置会覆盖 `config.yaml` 中的对应配置。
