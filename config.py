@@ -75,6 +75,7 @@ SEARCH_CONFIG = WECHAT_CONFIG.get("search_position", {
 MEMORY_CONFIG = _config.get("memory", {
     "enabled": True,
     "window_size": 10,
+    "merge_threshold": 50,
     "llm": {
         "model": "qwen3-vl-8b-instruct",
         "openai_base_url": "http://localhost:1234/v1",

@@ -102,6 +102,10 @@ class MemoryManager:
         self._stored_fingerprints: dict[str, OrderedDict] = {}
         self._max_fingerprints = 50
 
+        # 消息缓冲区：攒够再 merge，避免每次对话都调 LLM
+        self._pending_messages: dict[str, list[dict]] = {}
+        self._merge_threshold = mc.get("merge_threshold", 50)
+
         # 检索配置
         sc = mc.get("search", {})
         self._hyde_max_chars = sc.get("hyde_max_chars", 3)
@@ -339,7 +343,7 @@ subject: "对方"=关于{user_id}、"自己"=关于我、"关系"=两人之间""
         return "\n\n".join(parts) if parts else ""
 
     def store_context(self, messages: list[dict], user_id: str):
-        """『写』阶段：提取记忆 → LLM 分类去重 → 写入文件。
+        """『写』阶段：消息先攒缓冲区，攒够阈值才提取+合并。
 
         Args:
             messages: [{"sender": "self"/"other", "text": "..."}, ...]
@@ -366,20 +370,34 @@ subject: "对方"=关于{user_id}、"自己"=关于我、"关系"=两人之间""
             logger.debug(f"无新消息需要存储 [{user_id}]")
             return
 
-        logger.info(
-            f"增量存储 [{user_id}]: {len(messages)}条总量 → "
-            f"新增 {len(new_messages)}条"
+        # 更新短期记忆
+        self.short_term.update(new_messages, user_id)
+
+        # 攒消息到缓冲区
+        buf = self._pending_messages.setdefault(user_id, [])
+        buf.extend(new_messages)
+        logger.debug(
+            f"缓冲 [{user_id}]: {len(buf)}/{self._merge_threshold} 条消息待合并"
         )
 
-        # 1. LLM 提取记忆
-        extracted = self._extract_memories(new_messages, user_id)
+        # 攒够了 → 触发提取+合并
+        if len(buf) >= self._merge_threshold:
+            self._flush_pending(user_id)
+
+    def _flush_pending(self, user_id: str):
+        """将缓冲区的消息一次性提取+合并写入文件。"""
+        buf = self._pending_messages.pop(user_id, [])
+        if not buf:
+            return
+
+        logger.info(f"触发合并 [{user_id}]: 缓冲区 {len(buf)} 条消息")
+
+        extracted = self._extract_memories(buf, user_id)
         if extracted:
             logger.info(f"LLM 提取 {len(extracted)} 条记忆 [{user_id}]")
-            # 2. 合并写入文件
             self._file_store.merge(user_id, extracted, self._llm)
-
-        # 3. 更新短期记忆
-        self.short_term.update(new_messages, user_id)
+        else:
+            logger.info(f"LLM 未提取到新记忆 [{user_id}]")
 
     def get_all_memories(self, user_id: str) -> list[str]:
         """获取用户全部记忆（用于调试）。"""

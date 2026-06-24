@@ -32,6 +32,7 @@ wechat:
 memory:
   enabled: true
   window_size: 10
+  merge_threshold: 50         # 消息缓冲条数，攒够才合并（减少 LLM 调用）
   # LLM 配置（三合一：提取 + 合并 + 选择器共用）
   llm:
     model: "qwen3-vl-8b-instruct"
